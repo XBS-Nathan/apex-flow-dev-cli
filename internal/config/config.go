@@ -49,8 +49,9 @@ type ProjectConfig struct {
 	PHP      string                       `yaml:"php"`
 	Node     string                       `yaml:"node"`
 	DBDriver string                       `yaml:"db_driver"`
-	DB       string                       `yaml:"db"`
-	MySQL    MySQLConfig                  `yaml:"mysql"`
+	DB         string                       `yaml:"db"`
+	Extensions []string                     `yaml:"extensions"`
+	MySQL      MySQLConfig                  `yaml:"mysql"`
 	Postgres PostgresConfig               `yaml:"postgres"`
 	Hooks    Hooks                        `yaml:"hooks"`
 	Services map[string]ServiceDefinition `yaml:"services"`

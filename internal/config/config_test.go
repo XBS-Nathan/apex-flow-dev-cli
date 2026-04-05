@@ -193,6 +193,31 @@ func TestLoad_InvalidYAML(t *testing.T) {
 	}
 }
 
+func TestLoad_ParsesExtensions(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `
+extensions:
+  - imagick
+  - swoole
+`
+	os.WriteFile(filepath.Join(dir, ConfigFile), []byte(yaml), 0644)
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if len(cfg.Extensions) != 2 {
+		t.Fatalf("Extensions length = %d, want 2", len(cfg.Extensions))
+	}
+	if cfg.Extensions[0] != "imagick" {
+		t.Errorf("Extensions[0] = %q, want %q", cfg.Extensions[0], "imagick")
+	}
+	if cfg.Extensions[1] != "swoole" {
+		t.Errorf("Extensions[1] = %q, want %q", cfg.Extensions[1], "swoole")
+	}
+}
+
 func TestLoad_PostStopPreserved(t *testing.T) {
 	dir := t.TempDir()
 	yaml := `
