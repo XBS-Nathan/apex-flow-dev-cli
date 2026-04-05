@@ -5,14 +5,17 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
 	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/db"
 	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/project"
 )
 
-// DockerService manages shared Docker containers.
+// DockerService manages shared and per-project Docker containers.
 type DockerService interface {
 	Up(phpVersions []string) error
 	Down() error
+	UpProject(projectName, projectDir string, services map[string]config.ServiceDefinition) error
+	DownProject(projectName, projectDir string) error
 }
 
 // CaddyService manages the Caddy reverse proxy.
@@ -66,6 +69,13 @@ func (l *Lifecycle) Start(p *project.Project, fpmSocket string) error {
 		return fmt.Errorf("creating database: %w", err)
 	}
 
+	if len(p.Config.Services) > 0 {
+		l.printf("  → Starting project services...\n")
+		if err := l.Docker.UpProject(p.Name, p.Dir, p.Config.Services); err != nil {
+			return fmt.Errorf("starting project services: %w", err)
+		}
+	}
+
 	for _, hook := range p.Config.Hooks.PostStart {
 		l.printf("  → Running: %s\n", hook)
 		c := exec.Command("bash", "-c", hook)
@@ -97,6 +107,11 @@ func (l *Lifecycle) Stop(p *project.Project) error {
 		if err := c.Run(); err != nil {
 			l.printf("  ! hook failed: %s\n", err)
 		}
+	}
+
+	l.printf("  → Stopping project services...\n")
+	if err := l.Docker.DownProject(p.Name, p.Dir); err != nil {
+		l.printf("  ! project services: %s\n", err)
 	}
 
 	killProjectProcesses(p.Dir)

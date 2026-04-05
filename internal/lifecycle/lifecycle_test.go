@@ -19,6 +19,10 @@ type mockDocker struct {
 
 func (m *mockDocker) Up(_ []string) error { m.upCalled = true; return m.upErr }
 func (m *mockDocker) Down() error         { m.downCalled = true; return m.downErr }
+func (m *mockDocker) UpProject(_, _ string, _ map[string]config.ServiceDefinition) error {
+	return nil
+}
+func (m *mockDocker) DownProject(_, _ string) error { return nil }
 
 // mockCaddy records calls and can return errors.
 type mockCaddy struct {
