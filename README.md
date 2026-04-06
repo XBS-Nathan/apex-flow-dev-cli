@@ -138,6 +138,8 @@ nova completion fish > ~/.config/fish/completions/nova.fish
 
 ## Configuration
 
+> **Note:** If your project uses per-project `services:`, `nova` creates a `.nova/` directory in the project root to store a generated `docker-compose.yml`. Add `.nova/` to your `.gitignore`.
+
 ### Per-project: `.nova.yaml`
 
 Created by `nova init` or manually. Everything is optional — sensible defaults are used.
