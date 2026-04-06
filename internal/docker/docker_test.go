@@ -34,6 +34,7 @@ func TestGenerateCompose_IncludesCaddy(t *testing.T) {
 }
 
 func TestGenerateCompose_IncludesPHPVersions(t *testing.T) {
+	t.Parallel()
 	got := generateCompose(defaultOpts(t, "8.2", "8.3"))
 	if !strings.Contains(got, "php82:") {
 		t.Error("missing php82 service")
@@ -44,6 +45,7 @@ func TestGenerateCompose_IncludesPHPVersions(t *testing.T) {
 }
 
 func TestGenerateCompose_MountsProjectsDir(t *testing.T) {
+	t.Parallel()
 	opts := defaultOpts(t, "8.2")
 	opts.ProjectsDir = "/home/user/Code"
 	got := generateCompose(opts)
@@ -53,6 +55,7 @@ func TestGenerateCompose_MountsProjectsDir(t *testing.T) {
 }
 
 func TestGenerateCompose_IncludesVersionedMySQL(t *testing.T) {
+	t.Parallel()
 	opts := defaultOpts(t, "8.2")
 	opts.MySQLVersions = []string{"8.0", "9.0"}
 	got := generateCompose(opts)
@@ -71,6 +74,7 @@ func TestGenerateCompose_IncludesVersionedMySQL(t *testing.T) {
 }
 
 func TestGenerateCompose_IncludesVersionedRedis(t *testing.T) {
+	t.Parallel()
 	opts := defaultOpts(t, "8.2")
 	opts.RedisVersions = []string{"7", "8"}
 	got := generateCompose(opts)
@@ -83,6 +87,7 @@ func TestGenerateCompose_IncludesVersionedRedis(t *testing.T) {
 }
 
 func TestGenerateCompose_IncludesVersionedPostgres(t *testing.T) {
+	t.Parallel()
 	opts := defaultOpts(t, "8.2")
 	opts.MySQLVersions = nil
 	opts.PostgresVersions = []string{"15", "16"}
@@ -96,6 +101,7 @@ func TestGenerateCompose_IncludesVersionedPostgres(t *testing.T) {
 }
 
 func TestGenerateCompose_IncludesMailpit(t *testing.T) {
+	t.Parallel()
 	got := generateCompose(defaultOpts(t, "8.2"))
 	if !strings.Contains(got, "mailpit:") {
 		t.Error("missing mailpit service")
@@ -112,6 +118,7 @@ func TestGenerateCompose_IncludesMailpit(t *testing.T) {
 }
 
 func TestGenerateCompose_SharedServices(t *testing.T) {
+	t.Parallel()
 	got := generateCompose(defaultOpts(t, "8.2"))
 	if strings.Contains(got, "typesense:") {
 		t.Error("typesense should not be included by default")
@@ -140,6 +147,7 @@ func TestGenerateCompose_SharedServices(t *testing.T) {
 }
 
 func TestPHPServiceName(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		version string
 		want    string
@@ -159,6 +167,7 @@ func TestPHPServiceName(t *testing.T) {
 }
 
 func TestServiceName_SingleVersion(t *testing.T) {
+	t.Parallel()
 	if got := ServiceName("mysql", "8.0", 1); got != "mysql" {
 		t.Errorf("ServiceName with 1 version = %q, want %q", got, "mysql")
 	}
@@ -168,6 +177,7 @@ func TestServiceName_SingleVersion(t *testing.T) {
 }
 
 func TestServiceName_MultipleVersions(t *testing.T) {
+	t.Parallel()
 	if got := ServiceName("mysql", "8.0", 2); got != "mysql_80" {
 		t.Errorf("ServiceName with 2 versions = %q, want %q", got, "mysql_80")
 	}

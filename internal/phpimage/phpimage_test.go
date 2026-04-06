@@ -8,14 +8,13 @@ import (
 func baseCfg(t *testing.T, version string, extensions []string) ImageConfig {
 	t.Helper()
 	return ImageConfig{
-		PHPVersion:     version,
-		Extensions:     extensions,
-		NodeVersion:    "22",
-		PackageManager: "npm",
+		PHPVersion: version,
+		Extensions: extensions,
 	}
 }
 
 func TestGenerateDockerfile_BaseExtensionsOnly(t *testing.T) {
+	t.Parallel()
 	got := generateDockerfile(baseCfg(t, "8.2", nil))
 
 	if !strings.Contains(got, "FROM php:8.2-fpm-alpine") {
@@ -30,6 +29,7 @@ func TestGenerateDockerfile_BaseExtensionsOnly(t *testing.T) {
 }
 
 func TestGenerateDockerfile_WithExtraExtensions(t *testing.T) {
+	t.Parallel()
 	got := generateDockerfile(baseCfg(t, "8.3", []string{"imagick", "swoole"}))
 
 	if !strings.Contains(got, "FROM php:8.3-fpm-alpine") {
@@ -41,6 +41,7 @@ func TestGenerateDockerfile_WithExtraExtensions(t *testing.T) {
 }
 
 func TestGenerateDockerfile_WithNativeExtensions(t *testing.T) {
+	t.Parallel()
 	got := generateDockerfile(baseCfg(t, "8.2", []string{"gd", "zip", "intl", "exif"}))
 
 	for _, dep := range []string{"libpng-dev", "libzip-dev", "icu-dev"} {
@@ -57,6 +58,7 @@ func TestGenerateDockerfile_WithNativeExtensions(t *testing.T) {
 }
 
 func TestGenerateDockerfile_MixedExtensions(t *testing.T) {
+	t.Parallel()
 	got := generateDockerfile(baseCfg(t, "8.3", []string{"gd", "imagick"}))
 
 	if !strings.Contains(got, "docker-php-ext-install "+baseExtensions+" gd") {
@@ -67,38 +69,8 @@ func TestGenerateDockerfile_MixedExtensions(t *testing.T) {
 	}
 }
 
-func TestGenerateDockerfile_IncludesNodeJS(t *testing.T) {
-	got := generateDockerfile(baseCfg(t, "8.2", nil))
-
-	if !strings.Contains(got, "nodejs") {
-		t.Errorf("missing nodejs install:\n%s", got)
-	}
-	if !strings.Contains(got, "npm") {
-		t.Errorf("missing npm:\n%s", got)
-	}
-}
-
-func TestGenerateDockerfile_YarnPackageManager(t *testing.T) {
-	cfg := baseCfg(t, "8.2", nil)
-	cfg.PackageManager = "yarn"
-	got := generateDockerfile(cfg)
-
-	if !strings.Contains(got, "npm install -g yarn") {
-		t.Errorf("missing yarn install:\n%s", got)
-	}
-}
-
-func TestGenerateDockerfile_PnpmPackageManager(t *testing.T) {
-	cfg := baseCfg(t, "8.2", nil)
-	cfg.PackageManager = "pnpm"
-	got := generateDockerfile(cfg)
-
-	if !strings.Contains(got, "npm install -g pnpm") {
-		t.Errorf("missing pnpm install:\n%s", got)
-	}
-}
-
 func TestUnionExtensions(t *testing.T) {
+	t.Parallel()
 	projects := [][]string{
 		{"imagick", "swoole"},
 		{"swoole", "mongodb"},
@@ -119,19 +91,16 @@ func TestUnionExtensions(t *testing.T) {
 }
 
 func TestImageHash(t *testing.T) {
-	h1 := imageHash(ImageConfig{Extensions: []string{"imagick", "swoole"}, NodeVersion: "22", PackageManager: "npm"})
-	h2 := imageHash(ImageConfig{Extensions: []string{"swoole", "imagick"}, NodeVersion: "22", PackageManager: "npm"})
-	h3 := imageHash(ImageConfig{Extensions: []string{"imagick"}, NodeVersion: "22", PackageManager: "npm"})
-	h4 := imageHash(ImageConfig{Extensions: []string{"imagick", "swoole"}, NodeVersion: "22", PackageManager: "yarn"})
+	t.Parallel()
+	h1 := imageHash(ImageConfig{Extensions: []string{"imagick", "swoole"}})
+	h2 := imageHash(ImageConfig{Extensions: []string{"swoole", "imagick"}})
+	h3 := imageHash(ImageConfig{Extensions: []string{"imagick"}})
 
 	if h1 != h2 {
 		t.Error("hash should be order-independent")
 	}
 	if h1 == h3 {
 		t.Error("different extensions should produce different hashes")
-	}
-	if h1 == h4 {
-		t.Error("different package managers should produce different hashes")
 	}
 	if len(h1) != 8 {
 		t.Errorf("hash length = %d, want 8", len(h1))
