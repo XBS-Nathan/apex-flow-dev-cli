@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/docker"
+	"github.com/XBS-Nathan/nova/internal/config"
+	"github.com/XBS-Nathan/nova/internal/docker"
 )
 
 // MySQLStore implements Store using the mysql CLI inside a Docker container.

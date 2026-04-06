@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+	"github.com/XBS-Nathan/nova/internal/config"
 )
 
 // chdirTest changes to dir and registers cleanup to restore the original.

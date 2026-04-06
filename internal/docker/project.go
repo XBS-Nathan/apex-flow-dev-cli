@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+	"github.com/XBS-Nathan/nova/internal/config"
 )
 
 // ProjectComposeDir returns the .dev directory inside a project, creating it if needed.

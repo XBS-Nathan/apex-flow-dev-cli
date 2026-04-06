@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+	"github.com/XBS-Nathan/nova/internal/config"
 )
 
 const baseExtensions = "pdo_mysql pdo_pgsql opcache pcntl bcmath"

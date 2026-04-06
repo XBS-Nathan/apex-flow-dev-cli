@@ -8,10 +8,10 @@ import (
 
 	"github.com/pterm/pterm"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/caddy"
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/docker"
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/project"
+	"github.com/XBS-Nathan/nova/internal/caddy"
+	"github.com/XBS-Nathan/nova/internal/config"
+	"github.com/XBS-Nathan/nova/internal/docker"
+	"github.com/XBS-Nathan/nova/internal/project"
 )
 
 func TestMain(m *testing.M) {

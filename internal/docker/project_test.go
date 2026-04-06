@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+	"github.com/XBS-Nathan/nova/internal/config"
 )
 
 func TestGenerateProjectCompose_Empty(t *testing.T) {

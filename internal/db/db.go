@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+	"github.com/XBS-Nathan/nova/internal/config"
 )
 
 // Store defines the operations every database adapter must support.

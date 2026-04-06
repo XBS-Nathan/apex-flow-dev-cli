@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/project"
+	"github.com/XBS-Nathan/nova/internal/project"
 )
 
 func init() {

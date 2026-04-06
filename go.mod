@@ -1,4 +1,4 @@
-module github.com/XBS-Nathan/apex-flow-dev-cli
+module github.com/XBS-Nathan/nova
 
 go 1.25.0
 

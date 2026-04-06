@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/phpimage"
+	"github.com/XBS-Nathan/nova/internal/config"
+	"github.com/XBS-Nathan/nova/internal/phpimage"
 )
 
 // ComposeFile returns the path to the shared docker-compose.yml.

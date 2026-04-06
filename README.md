@@ -33,8 +33,8 @@ When working on multiple branches simultaneously via git worktrees, traditional 
 ### 1. Install
 
 ```bash
-git clone https://github.com/XBS-Nathan/apex-flow-dev-cli.git
-cd dev-cli
+git clone https://github.com/XBS-Nathan/nova.git
+cd nova
 go build -o dev .
 
 # Add to PATH

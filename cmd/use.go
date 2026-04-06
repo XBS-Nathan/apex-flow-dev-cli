@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/project"
+	"github.com/XBS-Nathan/nova/internal/config"
+	"github.com/XBS-Nathan/nova/internal/project"
 )
 
 func init() {

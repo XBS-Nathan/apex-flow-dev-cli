@@ -1,6 +1,6 @@
 package docker
 
-import "github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+import "github.com/XBS-Nathan/nova/internal/config"
 
 // Service wraps the docker package functions for the lifecycle interface.
 type Service struct {

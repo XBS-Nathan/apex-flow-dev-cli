@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/XBS-Nathan/apex-flow-dev-cli/internal/config"
+	"github.com/XBS-Nathan/nova/internal/config"
 )
 
 func defaultOpts(t *testing.T, versions ...string) ComposeOptions {

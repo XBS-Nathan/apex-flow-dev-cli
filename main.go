@@ -1,6 +1,6 @@
 package main
 
-import "github.com/XBS-Nathan/apex-flow-dev-cli/cmd"
+import "github.com/XBS-Nathan/nova/cmd"
 
 func main() {
 	cmd.Execute()
