@@ -17,7 +17,9 @@ const (
 	ConfigFile            = ".nova.yaml"
 )
 
-// GlobalDir returns ~/.nova, creating it if needed.
+// GlobalDir returns ~/.nova, creating it and its subdirectories if needed.
+// Subdirectories are pre-created before Docker can claim them as root-owned
+// volumes, preventing permission errors on first run.
 func GlobalDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -25,10 +27,19 @@ func GlobalDir() string {
 		os.Exit(1)
 	}
 	dir := filepath.Join(home, NovaDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error: cannot create %s: %v\n", dir, err)
-		os.Exit(1)
+
+	subdirs := []string{
+		"",
+		"caddy/sites",
+		"caddy/data",
 	}
+	for _, sub := range subdirs {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "error: cannot create %s: %v\n", filepath.Join(dir, sub), err)
+			os.Exit(1)
+		}
+	}
+
 	return dir
 }
 
