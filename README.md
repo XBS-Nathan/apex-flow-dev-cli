@@ -189,7 +189,7 @@ hooks:
     - "php artisan horizon &"
   post-stop: []
 
-# Per-project Docker services
+# Per-project Docker services (only run when this project is started)
 services:
   typesense:
     image: typesense/typesense:26.0
@@ -200,6 +200,15 @@ services:
     volumes:
       - typesense_data:/data
     command: "--data-dir /data --enable-cors"
+
+# Shared services (run once, shared across all projects)
+shared_services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_NO_ANALYTICS: "true"
 ```
 
 ### Global: `~/.dev/config.yaml`
@@ -238,6 +247,22 @@ versions:
 ├── config.yaml                # Global config
 └── snapshots/                 # Database snapshots
 ```
+
+## Shared Services
+
+By default, MySQL, Redis, and Mailpit are shared across all projects. You can also define custom shared services in any project's `.dev.yaml` under `shared_services:`. Unlike per-project `services:` (which only run when that project is started), shared services run once and are available to all projects.
+
+```bash
+# Start all shared services (MySQL, Redis, Mailpit, + custom)
+dev services up
+
+# Stop all shared services
+dev services down
+```
+
+When you run `dev services up`, it scans every `.dev.yaml` in your projects directory and collects all `shared_services` definitions. If multiple projects define the same service name, the first definition wins — they share a single container.
+
+This is useful for services like search engines, message queues, or monitoring tools that multiple projects depend on.
 
 ## How it works
 
