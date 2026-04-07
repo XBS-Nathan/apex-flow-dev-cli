@@ -46,15 +46,21 @@ func (s *MySQLStore) Snapshot(dbName, snapshotDir string) error {
 }
 
 // Restore detects the snapshot format and restores accordingly:
-//   - .sql.gz file: gunzip | mysql
-//   - .sql file: mysql < file
-//   - directory: myloader (or fallback to dump.sql.gz inside the dir)
+//   - .sql.zst file: zstd -d | mysql (in container)
+//   - .sql.gz file: gunzip | mysql (in container)
+//   - .sql file: mysql < file (in container)
+//   - directory: myloader on host, or fallback to dump file inside the dir
 func (s *MySQLStore) Restore(dbName, snapshotPath string) error {
 	if IsFileSnapshot(snapshotPath) {
 		return s.mysqlRestoreFile(dbName, snapshotPath)
 	}
 	if _, err := exec.LookPath("myloader"); err == nil {
 		return s.myloaderRestore(dbName, snapshotPath)
+	}
+	// Try zstd first, then gz fallback for legacy snapshots.
+	zstPath := filepath.Join(snapshotPath, "dump.sql.zst")
+	if _, err := os.Stat(zstPath); err == nil {
+		return s.mysqlRestoreFile(dbName, zstPath)
 	}
 	return s.mysqlRestoreFile(dbName, filepath.Join(snapshotPath, "dump.sql.gz"))
 }
@@ -98,22 +104,23 @@ func (s *MySQLStore) myloaderRestore(dbName, snapshotDir string) error {
 	return nil
 }
 
-// mysqldumpSnapshot is the fallback using mysqldump + gzip into a single
-// file inside the snapshot dir.
+// mysqldumpSnapshot runs mysqldump inside the Docker container and pipes the
+// output through zstd into a single file inside the snapshot dir.
 func (s *MySQLStore) mysqldumpSnapshot(dbName, snapshotDir string) error {
-	path := filepath.Join(snapshotDir, "dump.sql.gz")
+	path := filepath.Join(snapshotDir, "dump.sql.zst")
 
-	dump := exec.Command("mysqldump",
+	dump := dockerExec(s.Service,
+		"mysqldump",
 		"-u", s.Config.User, fmt.Sprintf("-p%s", s.Config.Pass),
-		"-h", s.Config.Host, "-P", s.Config.Port,
+		"-h", "127.0.0.1",
 		"--single-transaction", dbName,
 	)
-	gzip := exec.Command("gzip")
+	zstd := exec.Command("zstd", "-T0", "-q")
 
 	var err error
-	gzip.Stdin, err = dump.StdoutPipe()
+	zstd.Stdin, err = dump.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("piping mysqldump to gzip: %w", err)
+		return fmt.Errorf("piping mysqldump to zstd: %w", err)
 	}
 
 	outFile, err := os.Create(path)
@@ -121,23 +128,24 @@ func (s *MySQLStore) mysqldumpSnapshot(dbName, snapshotDir string) error {
 		return fmt.Errorf("creating snapshot file: %w", err)
 	}
 	defer outFile.Close()
-	gzip.Stdout = outFile
-	gzip.Stderr = os.Stderr
+	zstd.Stdout = outFile
+	zstd.Stderr = os.Stderr
 	dump.Stderr = os.Stderr
 
-	if err := gzip.Start(); err != nil {
-		return fmt.Errorf("starting gzip: %w", err)
+	if err := zstd.Start(); err != nil {
+		return fmt.Errorf("starting zstd: %w", err)
 	}
 	if err := dump.Run(); err != nil {
 		return fmt.Errorf("running mysqldump: %w", err)
 	}
-	if err := gzip.Wait(); err != nil {
-		return fmt.Errorf("gzip: %w", err)
+	if err := zstd.Wait(); err != nil {
+		return fmt.Errorf("zstd: %w", err)
 	}
 	return nil
 }
 
-// mysqlRestoreFile restores from a .sql or .sql.gz file.
+// mysqlRestoreFile restores from a .sql, .sql.gz, or .sql.zst file by piping
+// data into the mysql client running inside the Docker container.
 func (s *MySQLStore) mysqlRestoreFile(dbName, path string) error {
 	inFile, err := os.Open(path)
 	if err != nil {
@@ -145,15 +153,36 @@ func (s *MySQLStore) mysqlRestoreFile(dbName, path string) error {
 	}
 	defer inFile.Close()
 
-	mysql := exec.Command("mysql",
+	mysql := dockerExec(s.Service,
+		"mysql",
 		"-u", s.Config.User, fmt.Sprintf("-p%s", s.Config.Pass),
-		"-h", s.Config.Host, "-P", s.Config.Port,
+		"-h", "127.0.0.1",
 		dbName,
 	)
 	mysql.Stdout = os.Stdout
 	mysql.Stderr = os.Stderr
 
-	if strings.HasSuffix(path, ".gz") {
+	switch {
+	case strings.HasSuffix(path, ".zst"):
+		decompress := exec.Command("zstd", "-d", "-q")
+		decompress.Stdin = inFile
+		decompress.Stderr = os.Stderr
+
+		mysql.Stdin, err = decompress.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("piping zstd to mysql: %w", err)
+		}
+		if err := mysql.Start(); err != nil {
+			return fmt.Errorf("starting mysql: %w", err)
+		}
+		if err := decompress.Run(); err != nil {
+			return fmt.Errorf("running zstd decompress: %w", err)
+		}
+		if err := mysql.Wait(); err != nil {
+			return fmt.Errorf("mysql restore: %w", err)
+		}
+
+	case strings.HasSuffix(path, ".gz"):
 		gunzip := exec.Command("gunzip")
 		gunzip.Stdin = inFile
 		gunzip.Stderr = os.Stderr
@@ -162,7 +191,6 @@ func (s *MySQLStore) mysqlRestoreFile(dbName, path string) error {
 		if err != nil {
 			return fmt.Errorf("piping gunzip to mysql: %w", err)
 		}
-
 		if err := mysql.Start(); err != nil {
 			return fmt.Errorf("starting mysql: %w", err)
 		}
@@ -172,7 +200,8 @@ func (s *MySQLStore) mysqlRestoreFile(dbName, path string) error {
 		if err := mysql.Wait(); err != nil {
 			return fmt.Errorf("mysql restore: %w", err)
 		}
-	} else {
+
+	default:
 		mysql.Stdin = inFile
 		if err := mysql.Run(); err != nil {
 			return fmt.Errorf("mysql restore: %w", err)

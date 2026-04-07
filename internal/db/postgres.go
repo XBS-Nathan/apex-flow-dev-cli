@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -47,18 +48,27 @@ func (s *PostgresStore) Drop(dbName string) error {
 	return s.exec(sql)
 }
 
-// Snapshot uses pg_dump with directory format and parallel jobs.
+// Snapshot runs pg_dump inside the Docker container using custom format (-Fc),
+// streaming the output to a file on the host.
 func (s *PostgresStore) Snapshot(dbName, snapshotDir string) error {
-	cmd := exec.Command("pg_dump",
-		"-h", s.Config.Host, "-p", s.Config.Port, "-U", s.Config.User,
-		"-Fd",          // directory format
-		"-j", "4",      // parallel jobs
-		"-Z", "lz4:3",  // lz4 compression
-		"-f", snapshotDir,
+	path := filepath.Join(snapshotDir, "dump.pgc")
+
+	cmd := dockerExec(s.Service,
+		"pg_dump",
+		"-h", "127.0.0.1", "-U", s.Config.User,
+		"-Fc",     // custom format (single-file, supports parallel restore)
+		"-Z", "3", // compression level
 		dbName,
 	)
 	cmd.Env = s.connEnv()
-	cmd.Stdout = os.Stdout
+
+	outFile, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("creating snapshot file: %w", err)
+	}
+	defer outFile.Close()
+
+	cmd.Stdout = outFile
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("pg_dump: %w", err)
@@ -67,13 +77,18 @@ func (s *PostgresStore) Snapshot(dbName, snapshotDir string) error {
 }
 
 // Restore detects the snapshot format and restores accordingly:
-//   - .sql.gz file: gunzip | psql
-//   - .sql file: psql < file
-//   - directory: pg_restore -j4 (parallel)
+//   - .pgc file: pg_restore via Docker container (streamed through stdin)
+//   - .sql.gz file: gunzip | psql via Docker container
+//   - .sql file: psql via Docker container
+//   - directory: pg_restore on host (requires local pg_restore)
 func (s *PostgresStore) Restore(dbName, snapshotPath string) error {
 	if IsFileSnapshot(snapshotPath) {
+		if strings.HasSuffix(snapshotPath, ".pgc") {
+			return s.restorePgCustom(dbName, snapshotPath)
+		}
 		return s.restoreFile(dbName, snapshotPath)
 	}
+	// Directory format requires pg_restore on the host (legacy snapshots).
 	cmd := exec.Command("pg_restore",
 		"-h", s.Config.Host, "-p", s.Config.Port, "-U", s.Config.User,
 		"-d", dbName,
@@ -91,7 +106,34 @@ func (s *PostgresStore) Restore(dbName, snapshotPath string) error {
 	return nil
 }
 
-// restoreFile restores from a .sql or .sql.gz file via psql.
+// restorePgCustom restores from a .pgc (pg custom format) file by piping it
+// into pg_restore running inside the Docker container.
+func (s *PostgresStore) restorePgCustom(dbName, path string) error {
+	inFile, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("opening snapshot: %w", err)
+	}
+	defer inFile.Close()
+
+	cmd := dockerExec(s.Service,
+		"pg_restore",
+		"-h", "127.0.0.1", "-U", s.Config.User,
+		"-d", dbName,
+		"--clean",
+		"--if-exists",
+	)
+	cmd.Env = s.connEnv()
+	cmd.Stdin = inFile
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("pg_restore: %w", err)
+	}
+	return nil
+}
+
+// restoreFile restores from a .sql or .sql.gz file via psql inside the Docker
+// container.
 func (s *PostgresStore) restoreFile(dbName, path string) error {
 	inFile, err := os.Open(path)
 	if err != nil {
@@ -99,15 +141,36 @@ func (s *PostgresStore) restoreFile(dbName, path string) error {
 	}
 	defer inFile.Close()
 
-	psql := exec.Command("psql",
-		"-h", s.Config.Host, "-p", s.Config.Port, "-U", s.Config.User,
+	psql := dockerExec(s.Service,
+		"psql", "-U", s.Config.User,
+		"-h", "127.0.0.1",
 		"-d", dbName,
 	)
 	psql.Env = s.connEnv()
 	psql.Stdout = os.Stdout
 	psql.Stderr = os.Stderr
 
-	if strings.HasSuffix(path, ".gz") {
+	switch {
+	case strings.HasSuffix(path, ".zst"):
+		decompress := exec.Command("zstd", "-d", "-q")
+		decompress.Stdin = inFile
+		decompress.Stderr = os.Stderr
+
+		psql.Stdin, err = decompress.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("piping zstd to psql: %w", err)
+		}
+		if err := psql.Start(); err != nil {
+			return fmt.Errorf("starting psql: %w", err)
+		}
+		if err := decompress.Run(); err != nil {
+			return fmt.Errorf("running zstd decompress: %w", err)
+		}
+		if err := psql.Wait(); err != nil {
+			return fmt.Errorf("psql restore: %w", err)
+		}
+
+	case strings.HasSuffix(path, ".gz"):
 		gunzip := exec.Command("gunzip")
 		gunzip.Stdin = inFile
 		gunzip.Stderr = os.Stderr
@@ -116,7 +179,6 @@ func (s *PostgresStore) restoreFile(dbName, path string) error {
 		if err != nil {
 			return fmt.Errorf("piping gunzip to psql: %w", err)
 		}
-
 		if err := psql.Start(); err != nil {
 			return fmt.Errorf("starting psql: %w", err)
 		}
@@ -126,7 +188,8 @@ func (s *PostgresStore) restoreFile(dbName, path string) error {
 		if err := psql.Wait(); err != nil {
 			return fmt.Errorf("psql restore: %w", err)
 		}
-	} else {
+
+	default:
 		psql.Stdin = inFile
 		if err := psql.Run(); err != nil {
 			return fmt.Errorf("psql restore: %w", err)

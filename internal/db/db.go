@@ -32,9 +32,15 @@ func NewStore(dbc config.DBConfig, serviceName string) (Store, error) {
 	}
 }
 
-// SnapshotDir builds the snapshot directory path, creating it if needed.
+// SnapshotDir builds the global snapshot directory path, creating it if needed.
 func SnapshotDir(dbName, label string) string {
 	return snapshotDir(config.SnapshotDir(), dbName, label)
+}
+
+// LocalSnapshotDir builds a project-local snapshot directory under .nova/snapshots/.
+func LocalSnapshotDir(projectDir, dbName, label string) string {
+	baseDir := filepath.Join(projectDir, ".nova", "snapshots")
+	return snapshotDir(baseDir, dbName, label)
 }
 
 // snapshotDir is the testable core that builds a snapshot directory under baseDir.
@@ -47,9 +53,15 @@ func snapshotDir(baseDir, dbName, label string) string {
 	return dir
 }
 
-// ListSnapshots returns available snapshots for a database.
+// ListSnapshots returns available snapshots from the global directory.
 func ListSnapshots(dbName string) ([]string, error) {
 	return listSnapshots(config.SnapshotDir(), dbName)
+}
+
+// ListLocalSnapshots returns available snapshots from the project .nova/snapshots/ directory.
+func ListLocalSnapshots(projectDir, dbName string) ([]string, error) {
+	baseDir := filepath.Join(projectDir, ".nova", "snapshots")
+	return listSnapshots(baseDir, dbName)
 }
 
 // listSnapshots is the testable core that lists snapshots under baseDir.
@@ -69,7 +81,7 @@ func listSnapshots(baseDir, dbName string) ([]string, error) {
 		name := e.Name()
 		if e.IsDir() {
 			snapshots = append(snapshots, filepath.Join(dir, name))
-		} else if strings.HasSuffix(name, ".sql") || strings.HasSuffix(name, ".sql.gz") {
+		} else if strings.HasSuffix(name, ".sql") || strings.HasSuffix(name, ".sql.gz") || strings.HasSuffix(name, ".sql.zst") || strings.HasSuffix(name, ".pgc") {
 			snapshots = append(snapshots, filepath.Join(dir, name))
 		}
 	}

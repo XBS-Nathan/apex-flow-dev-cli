@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 
 	"github.com/XBS-Nathan/nova/internal/config"
@@ -16,6 +17,9 @@ func init() {
 	rootCmd.AddCommand(snapshotCmd)
 	snapshotCmd.AddCommand(snapshotRestoreCmd)
 	snapshotCmd.AddCommand(snapshotListCmd)
+	snapshotCmd.Flags().Bool("local", false, "Store snapshot in project .nova/ directory")
+	snapshotRestoreCmd.Flags().Bool("local", false, "Restore from project .nova/ directory")
+	snapshotListCmd.Flags().Bool("local", false, "List snapshots from project .nova/ directory")
 }
 
 var snapshotCmd = &cobra.Command{
@@ -43,7 +47,9 @@ var snapshotCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		snapshotDir := db.SnapshotDir(p.Config.DB, label)
+
+		local, _ := cmd.Flags().GetBool("local")
+		snapshotDir := snapshotDirForFlags(p, local, p.Config.DB, label)
 		if err := store.Snapshot(p.Config.DB, snapshotDir); err != nil {
 			return err
 		}
@@ -63,7 +69,8 @@ var snapshotRestoreCmd = &cobra.Command{
 			return err
 		}
 
-		snapshots, err := db.ListSnapshots(p.Config.DB)
+		local, _ := cmd.Flags().GetBool("local")
+		snapshots, err := listSnapshotsForFlags(p, local, p.Config.DB)
 		if err != nil {
 			return err
 		}
@@ -73,7 +80,6 @@ var snapshotRestoreCmd = &cobra.Command{
 
 		var snapshotPath string
 		if len(args) > 0 {
-			// Find snapshot by name
 			for _, s := range snapshots {
 				if filepath.Base(s) == args[0] {
 					snapshotPath = s
@@ -84,9 +90,24 @@ var snapshotRestoreCmd = &cobra.Command{
 				return fmt.Errorf("snapshot %q not found", args[0])
 			}
 		} else {
-			// Use most recent
 			sort.Strings(snapshots)
-			snapshotPath = snapshots[len(snapshots)-1]
+			options := make([]string, len(snapshots))
+			for i, s := range snapshots {
+				options[i] = filepath.Base(s)
+			}
+			selected, err := pterm.DefaultInteractiveSelect.
+				WithOptions(options).
+				WithDefaultOption(options[len(options)-1]).
+				Show("Select snapshot to restore")
+			if err != nil {
+				return fmt.Errorf("selecting snapshot: %w", err)
+			}
+			for _, s := range snapshots {
+				if filepath.Base(s) == selected {
+					snapshotPath = s
+					break
+				}
+			}
 		}
 
 		fmt.Printf("Restoring %s from %s...\n", p.Config.DB, filepath.Base(snapshotPath))
@@ -117,7 +138,8 @@ var snapshotListCmd = &cobra.Command{
 			return err
 		}
 
-		snapshots, err := db.ListSnapshots(p.Config.DB)
+		local, _ := cmd.Flags().GetBool("local")
+		snapshots, err := listSnapshotsForFlags(p, local, p.Config.DB)
 		if err != nil {
 			return err
 		}
@@ -133,4 +155,20 @@ var snapshotListCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// snapshotDirForFlags returns the snapshot directory based on --local flag.
+func snapshotDirForFlags(p *project.Project, local bool, dbName, label string) string {
+	if local {
+		return db.LocalSnapshotDir(p.Dir, dbName, label)
+	}
+	return db.SnapshotDir(dbName, label)
+}
+
+// listSnapshotsForFlags returns snapshots from the appropriate location.
+func listSnapshotsForFlags(p *project.Project, local bool, dbName string) ([]string, error) {
+	if local {
+		return db.ListLocalSnapshots(p.Dir, dbName)
+	}
+	return db.ListSnapshots(dbName)
 }
