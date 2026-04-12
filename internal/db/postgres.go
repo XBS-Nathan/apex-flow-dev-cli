@@ -19,17 +19,20 @@ type PostgresStore struct {
 }
 
 func (s *PostgresStore) CreateIfNotExists(dbName string) error {
+	if err := s.waitForReady(); err != nil {
+		return err
+	}
 	name := sanitizeDBName(dbName)
 	for _, n := range []string{name, name + "_testing"} {
 		sql := fmt.Sprintf(
-			"SELECT 'CREATE DATABASE \"%s\"' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '%s')\\gexec",
+			"SELECT 'CREATE DATABASE \"%s\"' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '%s') \\gexec\n",
 			n, n,
 		)
 		cmd := dockerExec(s.Service,
 			"psql", "-U", s.Config.User,
 			"-d", "postgres",
-			"-c", sql,
 		)
+		cmd.Stdin = strings.NewReader(sql)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("postgres create %s: %s: %w",
