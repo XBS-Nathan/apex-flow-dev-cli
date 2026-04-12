@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -29,6 +30,10 @@ func fetchTags(image string, maxPages int) ([]string, error) {
 		resp, err := client.Get(url)
 		if err != nil {
 			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("Docker Hub returned %d for %s", resp.StatusCode, image)
 		}
 		var data tagResponse
 		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
@@ -55,7 +60,7 @@ func filterPHP(tags []string) []string {
 			versions = append(versions, m[1])
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(versions)))
+	sortVersionsDesc(versions)
 	return versions
 }
 
@@ -70,7 +75,7 @@ func filterNode(tags []string) []string {
 			versions = append(versions, m[1])
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(versions)))
+	sortVersionsDesc(versions)
 	return versions
 }
 
@@ -85,7 +90,7 @@ func filterMajorMinor(tags []string) []string {
 			versions = append(versions, m[1])
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(versions)))
+	sortVersionsDesc(versions)
 	return versions
 }
 
@@ -100,8 +105,40 @@ func filterMajor(tags []string) []string {
 			versions = append(versions, m[1])
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(versions)))
+	sortVersionsDesc(versions)
 	return versions
+}
+
+// sortVersionsDesc sorts version strings numerically descending.
+// Supports "X" and "X.Y" formats.
+func sortVersionsDesc(versions []string) {
+	sort.Slice(versions, func(i, j int) bool {
+		return compareVersions(versions[i], versions[j]) > 0
+	})
+}
+
+// compareVersions compares two version strings numerically.
+// Returns positive if a > b, negative if a < b, zero if equal.
+func compareVersions(a, b string) int {
+	aParts := strings.Split(a, ".")
+	bParts := strings.Split(b, ".")
+	maxLen := len(aParts)
+	if len(bParts) > maxLen {
+		maxLen = len(bParts)
+	}
+	for i := 0; i < maxLen; i++ {
+		var av, bv int
+		if i < len(aParts) {
+			av, _ = strconv.Atoi(aParts[i])
+		}
+		if i < len(bParts) {
+			bv, _ = strconv.Atoi(bParts[i])
+		}
+		if av != bv {
+			return av - bv
+		}
+	}
+	return 0
 }
 
 type imageSpec struct {
