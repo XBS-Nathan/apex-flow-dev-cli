@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -75,10 +77,41 @@ var infoCmd = &cobra.Command{
 		// Connection details as a compact table
 		tableData := pterm.TableData{
 			{"Service", "Host", "Port", "User", "Password"},
+			{"Caddy", "caddy", "80, 443", "-", "-"},
 			{p.Config.DBDriver, dbService, dbPort, dbUser, dbPass},
 			{"Redis", redisService, "6379", "-", "-"},
 			{"Mailpit (SMTP)", "mailpit", "1025", "-", "-"},
 			{"Mailpit (UI)", "http://localhost:8025", "8025", "-", "-"},
+		}
+
+		// Shared services (e.g. typesense, meilisearch)
+		sharedNames := make([]string, 0, len(collected.SharedServices))
+		for name := range collected.SharedServices {
+			sharedNames = append(sharedNames, name)
+		}
+		sort.Strings(sharedNames)
+		for _, name := range sharedNames {
+			svc := collected.SharedServices[name]
+			ports := strings.Join(svc.Ports, ", ")
+			if ports == "" {
+				ports = "-"
+			}
+			tableData = append(tableData, []string{name, name, ports, "-", "-"})
+		}
+
+		// Per-project services
+		projectSvcNames := make([]string, 0, len(p.Config.Services))
+		for name := range p.Config.Services {
+			projectSvcNames = append(projectSvcNames, name)
+		}
+		sort.Strings(projectSvcNames)
+		for _, name := range projectSvcNames {
+			svc := p.Config.Services[name]
+			ports := strings.Join(svc.Ports, ", ")
+			if ports == "" {
+				ports = "-"
+			}
+			tableData = append(tableData, []string{name, name, ports, "-", "-"})
 		}
 
 		pterm.DefaultTable.
