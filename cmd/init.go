@@ -53,6 +53,7 @@ var initCmd = &cobra.Command{
 		projectType, err := pterm.DefaultInteractiveSelect.
 			WithOptions([]string{"laravel", "other"}).
 			WithDefaultOption(detectedType).
+			WithFilter(true).
 			Show("Project type")
 		if err != nil {
 			return err
@@ -76,6 +77,7 @@ var initCmd = &cobra.Command{
 		php, err := pterm.DefaultInteractiveSelect.
 			WithOptions(config.PHPVersions).
 			WithDefaultOption(config.DefaultPHP).
+			WithFilter(true).
 			Show("PHP version")
 		if err != nil {
 			return err
@@ -84,6 +86,7 @@ var initCmd = &cobra.Command{
 		node, err := pterm.DefaultInteractiveSelect.
 			WithOptions(config.NodeVersions).
 			WithDefaultOption(config.DefaultNode).
+			WithFilter(true).
 			Show("Node version")
 		if err != nil {
 			return err
@@ -92,6 +95,7 @@ var initCmd = &cobra.Command{
 		packageManager, err := pterm.DefaultInteractiveSelect.
 			WithOptions([]string{"npm", "yarn", "pnpm"}).
 			WithDefaultOption(config.DefaultPackageManager).
+			WithFilter(true).
 			Show("Package manager")
 		if err != nil {
 			return err
@@ -104,6 +108,7 @@ var initCmd = &cobra.Command{
 		dbDriver, err := pterm.DefaultInteractiveSelect.
 			WithOptions([]string{"mysql", "postgres"}).
 			WithDefaultOption("mysql").
+			WithFilter(true).
 			Show("Driver")
 		if err != nil {
 			return err
@@ -119,6 +124,7 @@ var initCmd = &cobra.Command{
 		dbVersion, err := pterm.DefaultInteractiveSelect.
 			WithOptions(dbVersionOptions).
 			WithDefaultOption(defaultDBVer).
+			WithFilter(true).
 			Show("Version")
 		if err != nil {
 			return err
@@ -139,6 +145,7 @@ var initCmd = &cobra.Command{
 		redisVersion, err := pterm.DefaultInteractiveSelect.
 			WithOptions(config.RedisVersions).
 			WithDefaultOption(config.DefaultRedisVersion).
+			WithFilter(true).
 			Show("Redis version")
 		if err != nil {
 			return err
