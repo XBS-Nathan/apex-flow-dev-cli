@@ -129,6 +129,58 @@ func GenerateProjectCompose(services map[string]config.ServiceDefinition) string
 	return b.String()
 }
 
+// ProjectLogs streams logs for a service in a project's compose file.
+func ProjectLogs(projectName, projectDir, service string) error {
+	composeFile := ProjectComposeFile(projectDir)
+	if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+		return fmt.Errorf("no project services running")
+	}
+
+	args := []string{
+		"compose",
+		"-f", composeFile,
+		"-p", fmt.Sprintf("nova-%s", projectName),
+		"logs", "-f", "--tail", "100",
+	}
+	if service != "" {
+		args = append(args, service)
+	}
+
+	cmd := exec.Command("docker", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("docker compose logs: %w", err)
+	}
+	return nil
+}
+
+// ProjectServices returns the list of service names in a project's compose file.
+func ProjectServices(projectName, projectDir string) []string {
+	composeFile := ProjectComposeFile(projectDir)
+	if _, err := os.Stat(composeFile); os.IsNotExist(err) {
+		return nil
+	}
+
+	cmd := exec.Command("docker", "compose",
+		"-f", composeFile,
+		"-p", fmt.Sprintf("nova-%s", projectName),
+		"config", "--services",
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	var services []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			services = append(services, line)
+		}
+	}
+	return services
+}
+
 // NodeServiceName returns the compose service name for a project's node container.
 func NodeServiceName(projectName string) string {
 	return "node-" + projectName
