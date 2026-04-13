@@ -204,6 +204,8 @@ func generateCompose(opts ComposeOptions) string {
 		b.WriteString("    pull_policy: never\n")
 		fmt.Fprintf(&b, "    user: \"%d:%d\"\n", os.Getuid(), os.Getgid())
 		b.WriteString("    restart: unless-stopped\n")
+		b.WriteString("    environment:\n")
+		b.WriteString("      NOVA: \"true\"\n")
 		b.WriteString("    volumes:\n")
 		fmt.Fprintf(&b, "      - %s:/srv\n", opts.ProjectsDir)
 		fmt.Fprintf(&b, "      - %s/php/%s/conf.d:/usr/local/etc/php/conf.custom\n",

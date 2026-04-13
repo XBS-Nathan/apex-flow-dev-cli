@@ -85,17 +85,20 @@ func nodeServiceForProject(
 	}
 	workdir := filepath.Join("/srv", rel)
 
-	// Build the install + run command based on package manager
+	// Enable corepack for pnpm/yarn, then run the configured command.
+	// node_modules is already on the host via volume mount.
 	pm := p.Config.PackageManager
-	installCmd := "npm install"
+	var setupCmds []string
 	switch pm {
-	case "yarn":
-		installCmd = "yarn install"
 	case "pnpm":
-		installCmd = "pnpm install"
+		setupCmds = append(setupCmds, "corepack enable pnpm")
+	case "yarn":
+		setupCmds = append(setupCmds, "corepack enable yarn")
 	}
 
-	cmd := fmt.Sprintf("cd %s && %s && %s", workdir, installCmd, p.Config.NodeCommand)
+	parts := append([]string{"cd " + workdir}, setupCmds...)
+	parts = append(parts, p.Config.NodeCommand)
+	cmd := strings.Join(parts, " && ")
 
 	return &config.ServiceDefinition{
 		Image: fmt.Sprintf("node:%s-alpine", p.Config.Node),
@@ -105,6 +108,7 @@ func nodeServiceForProject(
 		},
 		Environment: map[string]string{
 			"NODE_ENV": "development",
+			"NOVA":     "true",
 		},
 	}
 }
