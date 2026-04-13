@@ -58,6 +58,15 @@ var infoCmd = &cobra.Command{
 
 		fmt.Println()
 
+		// Node info line
+		nodeInfo := p.Config.Node + " (" + p.Config.PackageManager + ")"
+		if p.Config.NodeCommand != "" {
+			nodeInfo += "  " + pterm.Gray("cmd") + " " + pterm.White(p.Config.NodeCommand)
+			if len(p.Config.Ports) > 0 {
+				nodeInfo += "  " + pterm.Gray("port") + " " + pterm.White(strings.Join(p.Config.Ports, ", "))
+			}
+		}
+
 		// Title box
 		pterm.DefaultBox.
 			WithTitle(pterm.LightCyan(p.Name)).
@@ -69,15 +78,19 @@ var infoCmd = &cobra.Command{
 				pterm.Gray("Linked"), linked,
 				pterm.Gray("Services"), servicesUp,
 				pterm.Gray("PHP"), pterm.White(p.Config.PHP),
-				pterm.Gray("Node"), pterm.White(p.Config.Node+" ("+p.Config.PackageManager+")"),
+				pterm.Gray("Node"), nodeInfo,
 			)
 
 		fmt.Println()
 
 		// Connection details as a compact table
+		caddyPorts := "80, 443"
+		if len(p.Config.Ports) > 0 {
+			caddyPorts += ", " + strings.Join(p.Config.Ports, ", ")
+		}
 		tableData := pterm.TableData{
 			{"Service", "Host", "Port", "User", "Password"},
-			{"Caddy", "caddy", "80, 443", "-", "-"},
+			{"Caddy", "caddy", caddyPorts, "-", "-"},
 			{p.Config.DBDriver, dbService, dbPort, dbUser, dbPass},
 			{"Redis", redisService, "6379", "-", "-"},
 			{"Mailpit (SMTP)", "mailpit", "1025", "-", "-"},
