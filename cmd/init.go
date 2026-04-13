@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pterm/pterm"
@@ -101,6 +102,26 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
+		nodeCommand, err := pterm.DefaultInteractiveTextInput.
+			WithDefaultValue("").
+			Show("Node dev command (e.g. yarn run hot, leave empty to skip)")
+		if err != nil {
+			return err
+		}
+
+		var ports []string
+		if nodeCommand != "" {
+			portStr, err := pterm.DefaultInteractiveTextInput.
+				WithDefaultValue("").
+				Show("Dev server port (e.g. 8080, leave empty to skip)")
+			if err != nil {
+				return err
+			}
+			if portStr != "" {
+				ports = []string{portStr}
+			}
+		}
+
 		// --- Database ---
 		pterm.DefaultHeader.WithBackgroundStyle(pterm.NewStyle(pterm.BgDefault)).
 			WithTextStyle(pterm.NewStyle(pterm.Bold)).Println("Database")
@@ -151,16 +172,48 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
+		// Discover shared services from other projects
+		var selectedShared map[string]config.ServiceDefinition
+		global, err := config.LoadGlobal()
+		if err == nil {
+			collected := config.CollectVersions(global.ProjectsDir, &config.ProjectConfig{})
+			if len(collected.SharedServices) > 0 {
+				names := make([]string, 0, len(collected.SharedServices))
+				for name := range collected.SharedServices {
+					names = append(names, name)
+				}
+				sort.Strings(names)
+
+				picked, err := pterm.DefaultInteractiveMultiselect.
+					WithOptions(names).
+					WithFilter(true).
+					Show("Shared services (space to select, enter to confirm)")
+				if err != nil {
+					return err
+				}
+
+				if len(picked) > 0 {
+					selectedShared = make(map[string]config.ServiceDefinition, len(picked))
+					for _, name := range picked {
+						selectedShared[name] = collected.SharedServices[name]
+					}
+				}
+			}
+		}
+
 		// Build config
 		cfg := &initConfig{
 			Domain:         domain,
 			PHP:            php,
 			Node:           node,
 			PackageManager: packageManager,
+			NodeCommand:    nodeCommand,
+			Ports:          ports,
 			DBDriver:       dbDriver,
 			DBVersion:      dbVersion,
 			DB:             dbName,
 			RedisVersion:   redisVersion,
+			SharedServices: selectedShared,
 		}
 		if projectType != "other" {
 			cfg.Type = projectType
@@ -187,9 +240,24 @@ var initCmd = &cobra.Command{
 		fmt.Printf("  Type:     %s\n", projectType)
 		fmt.Printf("  Domain:   %s\n", domain)
 		fmt.Printf("  PHP:      %s\n", php)
-		fmt.Printf("  Node:     %s (%s)\n", node, packageManager)
+		nodeInfo := fmt.Sprintf("%s (%s)", node, packageManager)
+		if nodeCommand != "" {
+			nodeInfo += fmt.Sprintf(" — %s", nodeCommand)
+			if len(ports) > 0 {
+				nodeInfo += fmt.Sprintf(" on port %s", ports[0])
+			}
+		}
+		fmt.Printf("  Node:     %s\n", nodeInfo)
 		fmt.Printf("  Database: %s %s (%s)\n", dbDriver, dbVersion, dbName)
 		fmt.Printf("  Redis:    %s\n", redisVersion)
+		if len(selectedShared) > 0 {
+			shared := make([]string, 0, len(selectedShared))
+			for name := range selectedShared {
+				shared = append(shared, name)
+			}
+			sort.Strings(shared)
+			fmt.Printf("  Shared:   %s\n", strings.Join(shared, ", "))
+		}
 		fmt.Println()
 		pterm.Success.Printfln("Created %s", config.ConfigFile)
 		pterm.Info.Printfln("Run %s to get going.", pterm.LightCyan("nova start"))
@@ -201,13 +269,16 @@ var initCmd = &cobra.Command{
 
 // initConfig controls which fields are written to .nova/config.yaml.
 type initConfig struct {
-	Type           string `yaml:"type,omitempty"`
-	Domain         string `yaml:"domain"`
-	PHP            string `yaml:"php"`
-	Node           string `yaml:"node"`
-	PackageManager string `yaml:"package_manager"`
-	DBDriver       string `yaml:"db_driver"`
-	DBVersion      string `yaml:"db_version"`
-	DB             string `yaml:"db"`
-	RedisVersion   string `yaml:"redis_version"`
+	Type           string                              `yaml:"type,omitempty"`
+	Domain         string                              `yaml:"domain"`
+	PHP            string                              `yaml:"php"`
+	Node           string                              `yaml:"node"`
+	PackageManager string                              `yaml:"package_manager"`
+	NodeCommand    string                              `yaml:"node_command,omitempty"`
+	Ports          []string                            `yaml:"ports,omitempty"`
+	DBDriver       string                              `yaml:"db_driver"`
+	DBVersion      string                              `yaml:"db_version"`
+	DB             string                              `yaml:"db"`
+	RedisVersion   string                              `yaml:"redis_version"`
+	SharedServices map[string]config.ServiceDefinition `yaml:"shared_services,omitempty"`
 }

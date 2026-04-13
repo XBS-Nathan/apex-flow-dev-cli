@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
@@ -19,6 +21,7 @@ func init() {
 	useCmd.AddCommand(usePhpCmd)
 	useCmd.AddCommand(useNodeCmd)
 	useCmd.AddCommand(useDbDriverCmd)
+	useCmd.AddCommand(useServiceCmd)
 }
 
 var useCmd = &cobra.Command{
@@ -58,6 +61,100 @@ var useDbDriverCmd = &cobra.Command{
 			return fmt.Errorf("unsupported driver %q — use mysql or postgres", driver)
 		}
 		return setConfigField("db_driver", driver)
+	},
+}
+
+var useServiceCmd = &cobra.Command{
+	Use:   "service",
+	Short: "Add a shared service from another project",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		p, err := project.Detect()
+		if err != nil {
+			return err
+		}
+
+		global, err := config.LoadGlobal()
+		if err != nil {
+			return err
+		}
+
+		collected := config.CollectVersions(global.ProjectsDir, p.Config)
+		if len(collected.SharedServices) == 0 {
+			return fmt.Errorf("no shared services found in any project under %s", global.ProjectsDir)
+		}
+
+		// Filter out services already in this project
+		available := make(map[string]config.ServiceDefinition)
+		for name, svc := range collected.SharedServices {
+			if _, exists := p.Config.SharedServices[name]; !exists {
+				available[name] = svc
+			}
+		}
+		if len(available) == 0 {
+			fmt.Println("✓ All available shared services are already configured")
+			return nil
+		}
+
+		names := make([]string, 0, len(available))
+		for name := range available {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		picked, err := pterm.DefaultInteractiveMultiselect.
+			WithOptions(names).
+			WithFilter(true).
+			Show("Select shared services to add (space to select, enter to confirm)")
+		if err != nil {
+			return err
+		}
+		if len(picked) == 0 {
+			return nil
+		}
+
+		// Read existing config as map to preserve all fields
+		cfgPath := filepath.Join(p.Dir, config.ConfigFile)
+		data := make(map[string]interface{})
+		existing, err := os.ReadFile(cfgPath)
+		if err == nil {
+			if err := yaml.Unmarshal(existing, &data); err != nil {
+				return fmt.Errorf("parsing %s: %w", cfgPath, err)
+			}
+		}
+
+		// Merge selected services into shared_services
+		sharedRaw, _ := data["shared_services"].(map[string]interface{})
+		if sharedRaw == nil {
+			sharedRaw = make(map[string]interface{})
+		}
+		for _, name := range picked {
+			svc := available[name]
+			// Convert ServiceDefinition to a map for YAML marshaling
+			svcBytes, _ := yaml.Marshal(svc)
+			var svcMap interface{}
+			yaml.Unmarshal(svcBytes, &svcMap)
+			sharedRaw[name] = svcMap
+		}
+		data["shared_services"] = sharedRaw
+
+		out, err := yaml.Marshal(data)
+		if err != nil {
+			return fmt.Errorf("marshaling config: %w", err)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+			return fmt.Errorf("creating %s: %w", filepath.Dir(cfgPath), err)
+		}
+
+		if err := os.WriteFile(cfgPath, out, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", cfgPath, err)
+		}
+
+		for _, name := range picked {
+			fmt.Printf("✓ Added shared service %s\n", name)
+		}
+		fmt.Println("  Run nova restart to apply changes.")
+		return nil
 	},
 }
 
