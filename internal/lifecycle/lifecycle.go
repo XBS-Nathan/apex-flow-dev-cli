@@ -49,6 +49,7 @@ type Lifecycle struct {
 	ServiceVersions    config.ServiceVersions
 	Docroot            func(p *project.Project) string
 	NodeServiceBuilder func(p *project.Project) *config.ServiceDefinition
+	WorkersBuilder     func(p *project.Project) map[string]config.ServiceDefinition
 	Output             func(format string, a ...any)
 }
 
@@ -126,7 +127,7 @@ func (l *Lifecycle) Start(p *project.Project, php []docker.PHPVersion, forceRecr
 		return fmt.Errorf("creating database: %w", err)
 	}
 
-	// Merge node service into project services if configured
+	// Merge node service and workers into project services
 	projectServices := make(map[string]config.ServiceDefinition)
 	for k, v := range p.Config.Services {
 		projectServices[k] = v
@@ -134,6 +135,11 @@ func (l *Lifecycle) Start(p *project.Project, php []docker.PHPVersion, forceRecr
 	if l.NodeServiceBuilder != nil {
 		if nodeDef := l.NodeServiceBuilder(p); nodeDef != nil {
 			projectServices[nodeSvc] = *nodeDef
+		}
+	}
+	if l.WorkersBuilder != nil {
+		for k, v := range l.WorkersBuilder(p) {
+			projectServices[k] = v
 		}
 	}
 

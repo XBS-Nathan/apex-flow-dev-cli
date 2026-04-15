@@ -113,6 +113,45 @@ func nodeServiceForProject(
 	}
 }
 
+// workerServicesForProject builds ServiceDefinitions for each configured worker.
+// Workers run in the project's PHP image with auto-restart.
+func workerServicesForProject(
+	p *project.Project,
+	global *config.GlobalConfig,
+) map[string]config.ServiceDefinition {
+	if len(p.Config.Workers) == 0 {
+		return nil
+	}
+
+	rel, err := filepath.Rel(global.ProjectsDir, p.Dir)
+	if err != nil {
+		rel = p.Name
+	}
+	workdir := filepath.Join("/srv", rel)
+
+	image := phpimage.ImageTag(phpimage.ImageConfig{
+		PHPVersion: p.Config.PHP,
+		Extensions: p.Config.Extensions,
+	})
+
+	services := make(map[string]config.ServiceDefinition, len(p.Config.Workers))
+	for name, command := range p.Config.Workers {
+		svcName := fmt.Sprintf("%s-%s", name, p.Name)
+		cmd := fmt.Sprintf("cd %s && %s", workdir, command)
+		services[svcName] = config.ServiceDefinition{
+			Image:   image,
+			Command: fmt.Sprintf("sh -c '%s'", strings.ReplaceAll(cmd, "'", "'\\''")),
+			Volumes: []string{
+				fmt.Sprintf("%s:/srv", global.ProjectsDir),
+			},
+			Environment: map[string]string{
+				"NOVA": "true",
+			},
+		}
+	}
+	return services
+}
+
 func newLifecycle(
 	global *config.GlobalConfig,
 	projectCfg *config.ProjectConfig,
@@ -141,6 +180,9 @@ func newLifecycle(
 		},
 		NodeServiceBuilder: func(p *project.Project) *config.ServiceDefinition {
 			return nodeServiceForProject(p, global)
+		},
+		WorkersBuilder: func(p *project.Project) map[string]config.ServiceDefinition {
+			return workerServicesForProject(p, global)
 		},
 	}
 }
