@@ -28,7 +28,11 @@ var shareCmd = &cobra.Command{
 		// Try cloudflared first, fall back to ngrok
 		if _, err := exec.LookPath("cloudflared"); err == nil {
 			fmt.Printf("Sharing %s via Cloudflare Tunnel...\n", domain)
-			c := exec.Command("cloudflared", "tunnel", "--url", fmt.Sprintf("http://%s", domain))
+			c := exec.Command("cloudflared", "tunnel",
+				"--url", fmt.Sprintf("https://%s", domain),
+				"--no-tls-verify",
+				"--http-host-header", domain,
+			)
 			c.Stdout = os.Stdout
 			c.Stderr = os.Stderr
 			c.Stdin = os.Stdin
