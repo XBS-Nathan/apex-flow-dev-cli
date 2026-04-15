@@ -126,6 +126,26 @@ func ExecDetached(service, workdir string, args ...string) error {
 	return compose(execArgs...)
 }
 
+// Run executes a one-off command in a temporary container on the nova network.
+func Run(image, workdir, projectsDir, command string) error {
+	args := []string{
+		"run", "--rm", "-it",
+		"--network", "nova",
+		"-e", "COREPACK_HOME=/tmp/corepack",
+		"-e", "HOME=/tmp",
+		"-v", fmt.Sprintf("%s:/srv", projectsDir),
+		"-w", workdir,
+		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+		image,
+		"sh", "-c", command,
+	}
+	cmd := exec.Command("docker", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // IsUp checks if shared services are running.
 func IsUp() bool {
 	cmd := exec.Command("docker", "compose", "-f", ComposeFile(), "ps", "--status", "running", "-q")
@@ -206,6 +226,18 @@ func generateCompose(opts ComposeOptions) string {
 		b.WriteString("    restart: unless-stopped\n")
 		b.WriteString("    environment:\n")
 		b.WriteString("      NOVA: \"true\"\n")
+		// Apply resource throttling if configured
+		if throttle := config.LoadThrottle(); throttle != nil {
+			b.WriteString("    deploy:\n")
+			b.WriteString("      resources:\n")
+			b.WriteString("        limits:\n")
+			if throttle.CPUs != "" {
+				fmt.Fprintf(&b, "          cpus: \"%s\"\n", throttle.CPUs)
+			}
+			if throttle.Memory != "" {
+				fmt.Fprintf(&b, "          memory: %s\n", throttle.Memory)
+			}
+		}
 		b.WriteString("    volumes:\n")
 		fmt.Fprintf(&b, "      - %s:/srv\n", opts.ProjectsDir)
 		fmt.Fprintf(&b, "      - %s/php/%s/conf.d:/usr/local/etc/php/conf.custom\n",

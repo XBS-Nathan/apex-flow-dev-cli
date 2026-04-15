@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,48 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// ThrottleConfig holds CPU/memory limits for simulating slow servers.
+type ThrottleConfig struct {
+	CPUs   string `json:"cpus"`   // e.g. "0.5"
+	Memory string `json:"memory"` // e.g. "256m"
+}
+
+// ThrottlePath returns the path to the throttle config file.
+func ThrottlePath() string {
+	return filepath.Join(GlobalDir(), "throttle.json")
+}
+
+// LoadThrottle reads the throttle config. Returns nil if not set.
+func LoadThrottle() *ThrottleConfig {
+	data, err := os.ReadFile(ThrottlePath())
+	if err != nil {
+		return nil
+	}
+	var cfg ThrottleConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil
+	}
+	return &cfg
+}
+
+// SaveThrottle writes the throttle config.
+func SaveThrottle(cfg *ThrottleConfig) error {
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshaling throttle config: %w", err)
+	}
+	return os.WriteFile(ThrottlePath(), data, 0644)
+}
+
+// ClearThrottle removes the throttle config.
+func ClearThrottle() error {
+	err := os.Remove(ThrottlePath())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
 
 const (
 	DefaultPHP            = "8.2"
@@ -72,6 +115,7 @@ type ProjectConfig struct {
 	Extensions   []string                     `yaml:"extensions"`
 	MySQL        MySQLConfig                  `yaml:"mysql"`
 	Postgres     PostgresConfig               `yaml:"postgres"`
+	Workers        map[string]string            `yaml:"workers"`
 	Hooks          Hooks                        `yaml:"hooks"`
 	SharedServices map[string]ServiceDefinition `yaml:"shared_services"`
 	Services       map[string]ServiceDefinition `yaml:"services"`
