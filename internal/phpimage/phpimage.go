@@ -14,28 +14,30 @@ import (
 
 const baseExtensions = "pdo_mysql pdo_pgsql opcache pcntl bcmath"
 
-// baseBuildDeps are Alpine packages needed to compile the base extensions.
-var baseBuildDeps = []string{"postgresql-dev"}
+// baseBuildDeps are Debian packages needed to compile the base extensions.
+var baseBuildDeps = []string{"libpq-dev"}
 
-// baseRuntimeDeps are Alpine packages needed at runtime by base extensions.
-var baseRuntimeDeps = []string{"bash", "libpq", "mysql-client", "postgresql-client"}
+// baseRuntimeDeps are Debian packages needed at runtime by base extensions.
+// (`bash` and `linux-headers` are part of the Debian base image so they do
+// not need explicit installation, unlike on Alpine.)
+var baseRuntimeDeps = []string{"libpq5", "default-mysql-client", "postgresql-client"}
 
-// nativeExtDeps maps extensions to their Alpine build-time (-dev) packages.
+// nativeExtDeps maps extensions to their Debian build-time (-dev) packages.
 var nativeExtDeps = map[string][]string{
-	"gd":      {"libpng-dev", "libjpeg-turbo-dev", "freetype-dev"},
+	"gd":      {"libpng-dev", "libjpeg-dev", "libfreetype6-dev"},
 	"zip":     {"libzip-dev"},
-	"intl":    {"icu-dev"},
+	"intl":    {"libicu-dev"},
 	"exif":    {},
 	"soap":    {"libxml2-dev"},
 	"sockets": {},
 }
 
-// nativeExtRuntime maps extensions to their Alpine runtime packages
+// nativeExtRuntime maps extensions to their Debian runtime packages
 // (must remain after build deps are removed).
 var nativeExtRuntime = map[string][]string{
-	"gd":      {"libpng", "libjpeg-turbo", "freetype"},
-	"zip":     {"libzip"},
-	"intl":    {"icu-libs"},
+	"gd":      {"libpng16-16", "libjpeg62-turbo", "libfreetype6"},
+	"zip":     {"libzip4"},
+	"intl":    {"libicu72"},
 	"exif":    {},
 	"soap":    {"libxml2"},
 	"sockets": {},
@@ -171,18 +173,24 @@ func generateDockerfile(cfg ImageConfig) string {
 
 	switch cfg.runtime() {
 	case "frankenphp":
-		fmt.Fprintf(&b, "FROM dunglas/frankenphp:1-php%s-alpine\n\n", cfg.PHPVersion)
+		fmt.Fprintf(&b, "FROM dunglas/frankenphp:1-php%s-bookworm\n\n", cfg.PHPVersion)
 	default:
-		fmt.Fprintf(&b, "FROM php:%s-fpm-alpine\n\n", cfg.PHPVersion)
+		fmt.Fprintf(&b, "FROM php:%s-fpm-bookworm\n\n", cfg.PHPVersion)
 	}
 
-	// Install runtime libs permanently (survive the del step)
+	// Install runtime libs permanently in their own apt update; keeping them
+	// out of the build-deps install means they survive the apt-get purge step
+	// and stay available to the running container.
 	allRuntimeDeps := append(baseRuntimeDeps, runtimeDeps...)
-	fmt.Fprintf(&b, "RUN apk add --no-cache %s\n\n", strings.Join(allRuntimeDeps, " "))
+	fmt.Fprintf(&b, "RUN apt-get update \\\n")
+	fmt.Fprintf(&b, "    && apt-get install -y --no-install-recommends %s \\\n",
+		strings.Join(allRuntimeDeps, " "))
+	fmt.Fprintf(&b, "    && rm -rf /var/lib/apt/lists/*\n\n")
 
-	// Install build deps, compile extensions, then remove build deps
+	// Install build deps, compile extensions, then purge build deps + apt cache.
 	allBuildDeps := append(baseBuildDeps, buildDeps...)
-	fmt.Fprintf(&b, "RUN apk add --no-cache --virtual .build-deps linux-headers $PHPIZE_DEPS %s",
+	fmt.Fprintf(&b, "RUN apt-get update \\\n")
+	fmt.Fprintf(&b, "    && apt-get install -y --no-install-recommends %s",
 		strings.Join(allBuildDeps, " "))
 	fmt.Fprintf(&b, " \\\n")
 
@@ -204,7 +212,9 @@ func generateDockerfile(cfg ImageConfig) string {
 		fmt.Fprintf(&b, "    && docker-php-ext-enable %s \\\n", strings.Join(pecl, " "))
 	}
 
-	fmt.Fprintf(&b, "    && apk del .build-deps\n\n")
+	fmt.Fprintf(&b, "    && apt-get purge -y --auto-remove %s \\\n",
+		strings.Join(allBuildDeps, " "))
+	fmt.Fprintf(&b, "    && rm -rf /var/lib/apt/lists/*\n\n")
 
 	// Custom conf directory for host-mounted overrides (e.g., xdebug.ini)
 	fmt.Fprintf(&b, "RUN mkdir -p /usr/local/etc/php/conf.custom\n")
