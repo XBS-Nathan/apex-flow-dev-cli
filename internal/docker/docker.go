@@ -67,6 +67,27 @@ type ComposeOptions struct {
 
 // Up generates the compose file and starts services.
 func Up(opts ComposeOptions) error {
+	// Pre-create the host-side conf.d for every PHP service we're about to
+	// mount. If the directory does not exist, the Docker daemon (running as
+	// root) creates it for us — and then nothing else can write into it
+	// without sudo. WritePhpIni does this for the current project's version
+	// from `nova start`, but `nova restart`, `nova services up`, and
+	// `nova slow` reach Up() without that setup, so guard centrally here.
+	if err := ensurePHPConfDirs(opts); err != nil {
+		return err
+	}
+
+	// Ensure every referenced PHP image actually exists locally. The
+	// generated compose pins images by hash (and uses pull_policy: never),
+	// so a missing tag means the service silently fails to start and
+	// --remove-orphans then removes whatever was running. This bites when
+	// the Dockerfile-generation logic in this binary disagrees with the
+	// binary that built the cached images. Build any missing tag now so
+	// docker compose up has something to start.
+	if err := ensurePHPImagesBuilt(opts); err != nil {
+		return err
+	}
+
 	content := generateCompose(opts)
 	if err := os.WriteFile(ComposeFile(), []byte(content), 0644); err != nil {
 		return fmt.Errorf("writing compose file: %w", err)
@@ -76,6 +97,60 @@ func Up(opts ComposeOptions) error {
 		args = append(args, "--force-recreate")
 	}
 	return composeQuiet(args...)
+}
+
+// ensurePHPImagesBuilt builds any PHP/FrankenPHP image referenced by the
+// compose options that does not exist locally. EnsureBuilt is a no-op when
+// the tag is already present, so the cost is just a `docker image inspect`
+// per version when nothing has drifted.
+func ensurePHPImagesBuilt(opts ComposeOptions) error {
+	for _, php := range opts.PHP {
+		cfg := phpimage.ImageConfig{
+			PHPVersion: php.Version,
+			Extensions: php.Extensions,
+		}
+		if _, err := phpimage.EnsureBuilt(cfg); err != nil {
+			return fmt.Errorf("ensuring php %s image: %w", php.Version, err)
+		}
+	}
+	for _, fp := range opts.FrankenPHP {
+		cfg := phpimage.ImageConfig{
+			PHPVersion: fp.PHPVersion,
+			Extensions: fp.Extensions,
+			Runtime:    config.RuntimeFrankenPHP,
+		}
+		if _, err := phpimage.EnsureBuilt(cfg); err != nil {
+			return fmt.Errorf("ensuring frankenphp %s image: %w", fp.PHPVersion, err)
+		}
+	}
+	return nil
+}
+
+// ensurePHPConfDirs creates the host-side `php/<version>/conf.d` directory
+// for every PHP and FrankenPHP service that will be mounted, so that the
+// Docker daemon never has to create it as root.
+func ensurePHPConfDirs(opts ComposeOptions) error {
+	seen := make(map[string]bool)
+	versions := make([]string, 0, len(opts.PHP)+len(opts.FrankenPHP))
+	for _, p := range opts.PHP {
+		if !seen[p.Version] {
+			seen[p.Version] = true
+			versions = append(versions, p.Version)
+		}
+	}
+	for _, fp := range opts.FrankenPHP {
+		if !seen[fp.PHPVersion] {
+			seen[fp.PHPVersion] = true
+			versions = append(versions, fp.PHPVersion)
+		}
+	}
+	for _, v := range versions {
+		dir := filepath.Join(config.GlobalDir(), "php", v, "conf.d")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("creating php %s conf.d dir: %w", v, err)
+		}
+	}
+	return nil
 }
 
 // Pull re-downloads the latest images for shared services.

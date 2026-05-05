@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -111,32 +112,87 @@ func nodeServiceForProject(
 	}
 }
 
-// runtimePayload returns the (php, frankenphp) slices to pass to lifecycle.Start
-// based on the project's runtime configuration.
+// runtimePayload returns the (php, frankenphp) slices to pass to lifecycle.Start.
+// It includes services for every linked project (any project that has a
+// Caddy site file under <globalDir>/caddy/sites) plus the current project,
+// so that `nova start` on one project does not tear down PHP services
+// belonging to other already-running projects via --remove-orphans.
+//
+// Linked FPM projects sharing a PHP version share a single php<XX> service;
+// the current project's extensions/ports win when there's a conflict.
+// FrankenPHP projects each get their own per-project service.
 func runtimePayload(
 	p *project.Project,
 	global *config.GlobalConfig,
 ) ([]docker.PHPVersion, []docker.FrankenPHPProject, error) {
-	if p.Config.Runtime == config.RuntimeFrankenPHP {
-		rel, err := filepath.Rel(global.ProjectsDir, p.Dir)
-		if err != nil {
-			return nil, nil, fmt.Errorf("resolving project workdir: %w", err)
-		}
-		workdir := filepath.Join("/srv", rel)
-		return nil, []docker.FrankenPHPProject{{
-			Name:       p.Name,
-			PHPVersion: p.Config.PHP,
-			Extensions: p.Config.Extensions,
-			Octane:     p.Config.Octane,
-			Workdir:    workdir,
-			Ports:      p.Config.Ports,
-		}}, nil
+	type entry struct {
+		name string
+		dir  string
+		cfg  *config.ProjectConfig
 	}
-	return []docker.PHPVersion{{
-		Version:    p.Config.PHP,
-		Extensions: p.Config.Extensions,
-		Ports:      p.Config.Ports,
-	}}, nil, nil
+
+	// Current project is always included and always wins on conflicts.
+	entries := []entry{{name: p.Name, dir: p.Dir, cfg: p.Config}}
+	seen := map[string]bool{p.Name: true}
+
+	sitesDir := filepath.Join(config.GlobalDir(), "caddy", "sites")
+	if dirEntries, err := os.ReadDir(sitesDir); err == nil {
+		for _, e := range dirEntries {
+			name := strings.TrimSuffix(e.Name(), ".caddy")
+			if name == e.Name() || seen[name] {
+				continue
+			}
+			seen[name] = true
+			otherDir := filepath.Join(global.ProjectsDir, name)
+			otherCfg, err := config.Load(otherDir)
+			if err != nil {
+				continue
+			}
+			entries = append(entries, entry{name: name, dir: otherDir, cfg: otherCfg})
+		}
+	}
+
+	var php []docker.PHPVersion
+	var franken []docker.FrankenPHPProject
+	fpmIdxByVersion := map[string]int{}
+
+	for i, e := range entries {
+		if e.cfg.Runtime == config.RuntimeFrankenPHP {
+			rel, err := filepath.Rel(global.ProjectsDir, e.dir)
+			if err != nil {
+				return nil, nil, fmt.Errorf("resolving %s workdir: %w", e.name, err)
+			}
+			franken = append(franken, docker.FrankenPHPProject{
+				Name:       e.name,
+				PHPVersion: e.cfg.PHP,
+				Extensions: e.cfg.Extensions,
+				Octane:     e.cfg.Octane,
+				Workdir:    filepath.Join("/srv", rel),
+				Ports:      e.cfg.Ports,
+			})
+			continue
+		}
+		if idx, ok := fpmIdxByVersion[e.cfg.PHP]; ok {
+			// Current project (i == 0) overrides any linked project's
+			// extensions/ports for the same PHP version.
+			if i == 0 {
+				php[idx] = docker.PHPVersion{
+					Version:    e.cfg.PHP,
+					Extensions: e.cfg.Extensions,
+					Ports:      e.cfg.Ports,
+				}
+			}
+			continue
+		}
+		fpmIdxByVersion[e.cfg.PHP] = len(php)
+		php = append(php, docker.PHPVersion{
+			Version:    e.cfg.PHP,
+			Extensions: e.cfg.Extensions,
+			Ports:      e.cfg.Ports,
+		})
+	}
+
+	return php, franken, nil
 }
 
 // workerServicesForProject builds ServiceDefinitions for each configured worker.
