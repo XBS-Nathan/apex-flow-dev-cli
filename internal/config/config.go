@@ -173,6 +173,7 @@ type ServiceDefinition struct {
 	Environment map[string]string `yaml:"environment"`
 	Volumes     []string          `yaml:"volumes"`
 	Command     string            `yaml:"command"`
+	User        string            `yaml:"user"`
 }
 
 // Load reads .nova.yaml from the given project directory, returning defaults if not found.

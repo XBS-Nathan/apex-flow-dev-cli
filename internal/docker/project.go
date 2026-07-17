@@ -82,6 +82,9 @@ func GenerateProjectCompose(services map[string]config.ServiceDefinition) string
 		svc := services[name]
 		fmt.Fprintf(&b, "  %s:\n", name)
 		fmt.Fprintf(&b, "    image: %s\n", svc.Image)
+		if svc.User != "" {
+			fmt.Fprintf(&b, "    user: %q\n", svc.User)
+		}
 		b.WriteString("    restart: unless-stopped\n")
 
 		if len(svc.Ports) > 0 {

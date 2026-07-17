@@ -85,14 +85,18 @@ func nodeServiceForProject(
 	workdir := filepath.Join("/srv", rel)
 
 	// Enable corepack for pnpm/yarn, then run the configured command.
-	// node_modules is already on the host via volume mount.
+	// node_modules is already on the host via volume mount. The container
+	// runs as the host user, so corepack shims go into /tmp instead of
+	// the root-owned /usr/local/bin.
 	pm := p.Config.PackageManager
 	var setupCmds []string
 	switch pm {
-	case "pnpm":
-		setupCmds = append(setupCmds, "corepack enable pnpm")
-	case "yarn":
-		setupCmds = append(setupCmds, "corepack enable yarn")
+	case "pnpm", "yarn":
+		setupCmds = append(setupCmds,
+			"mkdir -p /tmp/corepack-bin",
+			"corepack enable --install-directory /tmp/corepack-bin "+pm,
+			"export PATH=/tmp/corepack-bin:$PATH",
+		)
 	}
 
 	parts := append([]string{"cd " + workdir}, setupCmds...)
@@ -100,16 +104,25 @@ func nodeServiceForProject(
 	cmd := strings.Join(parts, " && ")
 
 	return &config.ServiceDefinition{
-		Image: fmt.Sprintf("node:%s-alpine", p.Config.Node),
+		Image:   fmt.Sprintf("node:%s-alpine", p.Config.Node),
+		User:    hostUser(),
 		Command: fmt.Sprintf("sh -c '%s'", strings.ReplaceAll(cmd, "'", "'\\''")),
 		Volumes: []string{
 			fmt.Sprintf("%s:/srv", global.ProjectsDir),
 		},
 		Environment: map[string]string{
-			"NODE_ENV": "development",
-			"NOVA":     "true",
+			"NODE_ENV":      "development",
+			"NOVA":          "true",
+			"HOME":          "/tmp",
+			"COREPACK_HOME": "/tmp/corepack",
 		},
 	}
+}
+
+// hostUser returns the current host uid:gid for pinning container users, so
+// files written to bind mounts stay owned by the host user.
+func hostUser() string {
+	return fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
 }
 
 // runtimePayload returns the (php, frankenphp) slices to pass to lifecycle.Start.
@@ -223,6 +236,7 @@ func workerServicesForProject(
 		cmd := fmt.Sprintf("cd %s && %s", workdir, command)
 		services[svcName] = config.ServiceDefinition{
 			Image:   image,
+			User:    hostUser(),
 			Command: fmt.Sprintf("sh -c '%s'", strings.ReplaceAll(cmd, "'", "'\\''")),
 			Volumes: []string{
 				fmt.Sprintf("%s:/srv", global.ProjectsDir),
@@ -249,8 +263,8 @@ func newLifecycle(
 			Collected:      collected,
 			MailpitVersion: global.Versions.Mailpit,
 		},
-		Caddy:         caddy.Service{},
-		Hosts:         hosts.Service{},
+		Caddy:           caddy.Service{},
+		Hosts:           hosts.Service{},
 		DBServiceName:   dbServiceName,
 		ServiceVersions: global.Versions,
 		Docroot: func(p *project.Project) string {
@@ -268,5 +282,3 @@ func newLifecycle(
 		},
 	}
 }
-
-
