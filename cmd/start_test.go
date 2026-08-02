@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -36,7 +38,7 @@ func TestNodeServiceForProject(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name: "pnpm includes corepack enable pnpm",
+			name: "pnpm enables corepack in a writable install dir",
 			project: &project.Project{
 				Name: "myapp",
 				Dir:  "/home/user/projects/myapp",
@@ -49,8 +51,11 @@ func TestNodeServiceForProject(t *testing.T) {
 			wantImage: "node:20-alpine",
 			checkCmd: func(t *testing.T, cmd string) {
 				t.Helper()
-				if !strings.Contains(cmd, "corepack enable pnpm") {
-					t.Errorf("command should contain 'corepack enable pnpm', got: %s", cmd)
+				if !strings.Contains(cmd, "corepack enable --install-directory /tmp/corepack-bin pnpm") {
+					t.Errorf("command should enable pnpm into /tmp/corepack-bin, got: %s", cmd)
+				}
+				if !strings.Contains(cmd, "export PATH=/tmp/corepack-bin:$PATH") {
+					t.Errorf("command should prepend /tmp/corepack-bin to PATH, got: %s", cmd)
 				}
 				if !strings.Contains(cmd, "pnpm dev") {
 					t.Errorf("command should contain 'pnpm dev', got: %s", cmd)
@@ -58,7 +63,7 @@ func TestNodeServiceForProject(t *testing.T) {
 			},
 		},
 		{
-			name: "yarn includes corepack enable yarn",
+			name: "yarn enables corepack in a writable install dir",
 			project: &project.Project{
 				Name: "myapp",
 				Dir:  "/home/user/projects/myapp",
@@ -71,8 +76,11 @@ func TestNodeServiceForProject(t *testing.T) {
 			wantImage: "node:18-alpine",
 			checkCmd: func(t *testing.T, cmd string) {
 				t.Helper()
-				if !strings.Contains(cmd, "corepack enable yarn") {
-					t.Errorf("command should contain 'corepack enable yarn', got: %s", cmd)
+				if !strings.Contains(cmd, "corepack enable --install-directory /tmp/corepack-bin yarn") {
+					t.Errorf("command should enable yarn into /tmp/corepack-bin, got: %s", cmd)
+				}
+				if !strings.Contains(cmd, "export PATH=/tmp/corepack-bin:$PATH") {
+					t.Errorf("command should prepend /tmp/corepack-bin to PATH, got: %s", cmd)
 				}
 				if !strings.Contains(cmd, "yarn dev") {
 					t.Errorf("command should contain 'yarn dev', got: %s", cmd)
@@ -207,6 +215,51 @@ func TestNodeServiceForProject(t *testing.T) {
 			if got.Volumes[0] != wantVolume {
 				t.Errorf("volume = %q, want %q", got.Volumes[0], wantVolume)
 			}
+
+			// All non-nil results run as the host user so files written to
+			// the bind mount stay owned by the host user, with HOME and
+			// COREPACK_HOME pointed at writable locations.
+			wantUser := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+			if got.User != wantUser {
+				t.Errorf("user = %q, want %q", got.User, wantUser)
+			}
+			if got.Environment["HOME"] != "/tmp" {
+				t.Errorf("HOME env = %q, want %q", got.Environment["HOME"], "/tmp")
+			}
+			if got.Environment["COREPACK_HOME"] != "/tmp/corepack" {
+				t.Errorf("COREPACK_HOME env = %q, want %q",
+					got.Environment["COREPACK_HOME"], "/tmp/corepack")
+			}
 		})
+	}
+}
+
+func TestWorkerServicesForProject_RunsAsHostUser(t *testing.T) {
+	t.Parallel()
+
+	global := &config.GlobalConfig{
+		ProjectsDir: "/home/user/projects",
+	}
+	p := &project.Project{
+		Name: "myapp",
+		Dir:  "/home/user/projects/myapp",
+		Config: &config.ProjectConfig{
+			PHP: "8.4",
+			Workers: map[string]string{
+				"horizon": "php artisan horizon",
+			},
+		},
+	}
+
+	services := workerServicesForProject(p, global)
+
+	svc, ok := services["horizon-myapp"]
+	if !ok {
+		t.Fatalf("expected horizon-myapp service, got %v", services)
+	}
+
+	wantUser := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+	if svc.User != wantUser {
+		t.Errorf("user = %q, want %q", svc.User, wantUser)
 	}
 }

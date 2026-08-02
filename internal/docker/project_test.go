@@ -47,6 +47,35 @@ func TestGenerateProjectCompose_SingleService(t *testing.T) {
 	}
 }
 
+func TestGenerateProjectCompose_UserDirective(t *testing.T) {
+	services := map[string]config.ServiceDefinition{
+		"worker": {
+			Image: "nova-fpm:8.4-abc123",
+			User:  "1000:1000",
+		},
+	}
+
+	result := GenerateProjectCompose(services)
+
+	if !strings.Contains(result, "user: \"1000:1000\"") {
+		t.Errorf("expected user directive in output, got:\n%s", result)
+	}
+}
+
+func TestGenerateProjectCompose_NoUserDirectiveWhenUnset(t *testing.T) {
+	services := map[string]config.ServiceDefinition{
+		"typesense": {
+			Image: "typesense/typesense:27.1",
+		},
+	}
+
+	result := GenerateProjectCompose(services)
+
+	if strings.Contains(result, "user:") {
+		t.Errorf("expected no user directive for service without User, got:\n%s", result)
+	}
+}
+
 func TestGenerateProjectCompose_MultipleServices(t *testing.T) {
 	services := map[string]config.ServiceDefinition{
 		"elasticsearch": {
