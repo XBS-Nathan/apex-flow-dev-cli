@@ -19,7 +19,7 @@ func TestGenerateDockerfile_BaseExtensionsOnly(t *testing.T) {
 	t.Parallel()
 	got := generateDockerfile(baseCfg(t, "8.2", nil))
 
-	if !strings.Contains(got, "FROM php:8.2-fpm-alpine") {
+	if !strings.Contains(got, "FROM php:8.2-fpm-bookworm") {
 		t.Error("missing base image")
 	}
 	if !strings.Contains(got, "pdo_mysql") {
@@ -34,7 +34,7 @@ func TestGenerateDockerfile_WithExtraExtensions(t *testing.T) {
 	t.Parallel()
 	got := generateDockerfile(baseCfg(t, "8.3", []string{"imagick", "swoole"}))
 
-	if !strings.Contains(got, "FROM php:8.3-fpm-alpine") {
+	if !strings.Contains(got, "FROM php:8.3-fpm-bookworm") {
 		t.Error("missing base image")
 	}
 	if !strings.Contains(got, "pecl install imagick swoole") {
@@ -155,7 +155,7 @@ func TestImageTag_RuntimesProduceDifferentTags(t *testing.T) {
 func TestGenerateDockerfile_FPM_BaseImage(t *testing.T) {
 	t.Parallel()
 	df := generateDockerfile(ImageConfig{PHPVersion: "8.3", Runtime: "fpm"})
-	if !strings.Contains(df, "FROM php:8.3-fpm-alpine") {
+	if !strings.Contains(df, "FROM php:8.3-fpm-bookworm") {
 		t.Errorf("FPM Dockerfile missing fpm base, got:\n%s", df)
 	}
 	if !strings.Contains(df, "php-fpm.d/www.conf") {
@@ -166,7 +166,7 @@ func TestGenerateDockerfile_FPM_BaseImage(t *testing.T) {
 func TestGenerateDockerfile_FrankenPHP_BaseImage(t *testing.T) {
 	t.Parallel()
 	df := generateDockerfile(ImageConfig{PHPVersion: "8.3", Runtime: "frankenphp"})
-	if !strings.Contains(df, "FROM dunglas/frankenphp:1-php8.3-alpine") {
+	if !strings.Contains(df, "FROM dunglas/frankenphp:1-php8.3-bookworm") {
 		t.Errorf("FrankenPHP Dockerfile missing frankenphp base, got:\n%s", df)
 	}
 	if strings.Contains(df, "php-fpm.d/www.conf") {
