@@ -33,6 +33,13 @@ type GlobalConfig struct {
 	Versions    ServiceVersions   `yaml:"versions"`
 	PhpIni      map[string]string `yaml:"php_ini"`
 	MysqlCnf    map[string]string `yaml:"mysql_cnf"`
+
+	// DNS enables the shared wildcard .test DNS responder so other
+	// machines (e.g. over Tailscale) can resolve Nova sites.
+	DNS bool `yaml:"dns"`
+	// DNSBind pins the responder's bind IP; when empty the Tailscale
+	// IPv4 address is auto-detected.
+	DNSBind string `yaml:"dns_bind"`
 }
 
 // loadGlobal reads devDir/config.yaml and returns a GlobalConfig with defaults applied.

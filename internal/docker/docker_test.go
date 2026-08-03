@@ -296,3 +296,37 @@ func TestGenerateCompose_NoFrankenPHP_NoChange(t *testing.T) {
 		t.Errorf("compose should not mention frankenphp when no FrankenPHP projects, got:\n%s", got)
 	}
 }
+
+func TestGenerateCompose_DNSService(t *testing.T) {
+	t.Setenv("HOME", "/home/user")
+
+	opts := defaultOpts(t, "8.2")
+	opts.DNSListenIP = "100.64.0.5"
+	got := generateCompose(opts)
+
+	if !strings.Contains(got, "  dns:\n") {
+		t.Fatalf("missing dns service, got:\n%s", got)
+	}
+	if !strings.Contains(got, "coredns/coredns") {
+		t.Error("dns service missing coredns image")
+	}
+	// Port 53 must bind only the requested address, not 0.0.0.0.
+	if !strings.Contains(got, "\"100.64.0.5:53:53/udp\"") {
+		t.Errorf("dns service missing udp port binding, got:\n%s", got)
+	}
+	if !strings.Contains(got, "\"100.64.0.5:53:53/tcp\"") {
+		t.Errorf("dns service missing tcp port binding, got:\n%s", got)
+	}
+	if !strings.Contains(got, "/dns:/etc/coredns") {
+		t.Errorf("dns service missing Corefile mount, got:\n%s", got)
+	}
+}
+
+func TestGenerateCompose_NoDNSByDefault(t *testing.T) {
+	t.Setenv("HOME", "/home/user")
+
+	got := generateCompose(defaultOpts(t, "8.2"))
+	if strings.Contains(got, "coredns") {
+		t.Errorf("compose should not include dns service by default, got:\n%s", got)
+	}
+}

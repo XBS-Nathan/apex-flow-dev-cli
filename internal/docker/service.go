@@ -7,6 +7,7 @@ type Service struct {
 	ProjectsDir    string
 	Collected      config.CollectedVersions
 	MailpitVersion string
+	DNSListenIP    string
 }
 
 func (s Service) Up(php []PHPVersion, frankenphp []FrankenPHPProject, forceRecreate bool) error {
@@ -20,6 +21,7 @@ func (s Service) Up(php []PHPVersion, frankenphp []FrankenPHPProject, forceRecre
 		MailpitVersion:   s.MailpitVersion,
 		SharedServices:   s.Collected.SharedServices,
 		ForceRecreate:    forceRecreate,
+		DNSListenIP:      s.DNSListenIP,
 	})
 }
 

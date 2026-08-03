@@ -262,6 +262,7 @@ func newLifecycle(
 			ProjectsDir:    global.ProjectsDir,
 			Collected:      collected,
 			MailpitVersion: global.Versions.Mailpit,
+			DNSListenIP:    dnsListenIP(global),
 		},
 		Caddy:           caddy.Service{},
 		Hosts:           hosts.Service{},

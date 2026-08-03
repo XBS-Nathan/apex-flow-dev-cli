@@ -256,7 +256,29 @@ php_ini:
 # MySQL cnf overrides (apply to all projects)
 mysql_cnf:
   innodb_buffer_pool_size: 1G
+
+# Wildcard .test DNS responder for remote access (default: false).
+# Answers every *.test query with this machine's Tailscale IP so other
+# devices (laptop, phone) can reach Nova sites over the tailnet.
+dns: true
+
+# Bind IP for the DNS responder (default: auto-detect via `tailscale ip -4`)
+dns_bind: 100.64.0.5
 ```
+
+### Remote access (Tailscale)
+
+With `dns: true`, `nova start` runs a small CoreDNS container on port 53 of
+your Tailscale IP that resolves every `*.test` domain to this machine. To use
+it from another device:
+
+- **Per-device (macOS):** `echo "nameserver <tailscale-ip>" | sudo tee /etc/resolver/test`
+- **Whole tailnet:** in the Tailscale admin console, add a custom nameserver
+  with your machine's Tailscale IP, restricted to the `test` domain (split
+  DNS). Every device then resolves Nova sites automatically.
+
+For HTTPS without warnings, copy `~/.nova/caddy-root-ca.crt` (created by
+`nova trust`) to the device and trust it.
 
 ### Directory structure
 

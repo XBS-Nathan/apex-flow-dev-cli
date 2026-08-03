@@ -236,6 +236,7 @@ func ensurePHPRunning(version string) error {
 		ProjectsDir:    global.ProjectsDir,
 		Collected:      config.CollectVersions(global.ProjectsDir, p.Config),
 		MailpitVersion: global.Versions.Mailpit,
+		DNSListenIP:    dnsListenIP(global),
 	}
 	// FrankenPHP runtime is per-project; nova use only switches the shared FPM
 	// container's PHP version. Use nova start/restart to manage FrankenPHP projects.

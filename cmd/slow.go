@@ -103,6 +103,7 @@ func restartServices() error {
 		ProjectsDir:    global.ProjectsDir,
 		Collected:      config.CollectVersions(global.ProjectsDir, p.Config),
 		MailpitVersion: global.Versions.Mailpit,
+		DNSListenIP:    dnsListenIP(global),
 	}
 	return svc.Up(php, frankenphp, true)
 }

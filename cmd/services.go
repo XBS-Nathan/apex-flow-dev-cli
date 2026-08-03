@@ -54,6 +54,7 @@ var servicesUpCmd = &cobra.Command{
 			PostgresVersions: collected.Postgres,
 			RedisVersions:    collected.Redis,
 			MailpitVersion:   global.Versions.Mailpit,
+			DNSListenIP:      dnsListenIP(global),
 		}
 		if err := docker.Up(opts); err != nil {
 			return err

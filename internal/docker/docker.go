@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/XBS-Nathan/nova/internal/config"
+	"github.com/XBS-Nathan/nova/internal/dns"
 	"github.com/XBS-Nathan/nova/internal/phpimage"
 )
 
@@ -63,6 +64,10 @@ type ComposeOptions struct {
 	MailpitVersion string
 	SharedServices map[string]config.ServiceDefinition
 	ForceRecreate  bool
+
+	// DNSListenIP is the host address the wildcard .test DNS responder
+	// binds to (e.g. the Tailscale IP). Empty disables the dns service.
+	DNSListenIP string
 }
 
 // Up generates the compose file and starts services.
@@ -86,6 +91,14 @@ func Up(opts ComposeOptions) error {
 	// docker compose up has something to start.
 	if err := ensurePHPImagesBuilt(opts); err != nil {
 		return err
+	}
+
+	// The dns service mounts its Corefile from the global dir; write it
+	// before compose up so the container never starts without config.
+	if opts.DNSListenIP != "" {
+		if err := dns.WriteCorefile(config.GlobalDir(), opts.DNSListenIP); err != nil {
+			return err
+		}
 	}
 
 	content := generateCompose(opts)
@@ -450,6 +463,20 @@ func generateCompose(opts ComposeOptions) string {
 		fmt.Fprintf(&b, "      - %s:/data\n", volName)
 		b.WriteString("    networks: [nova]\n\n")
 		volumes = append(volumes, volName)
+	}
+
+	// Wildcard .test DNS responder for remote access (opt-in)
+	if opts.DNSListenIP != "" {
+		b.WriteString("  dns:\n")
+		b.WriteString("    image: coredns/coredns:1.12.0\n")
+		b.WriteString("    restart: unless-stopped\n")
+		b.WriteString("    command: [\"-conf\", \"/etc/coredns/Corefile\"]\n")
+		b.WriteString("    ports:\n")
+		fmt.Fprintf(&b, "      - \"%s:53:53/udp\"\n", opts.DNSListenIP)
+		fmt.Fprintf(&b, "      - \"%s:53:53/tcp\"\n", opts.DNSListenIP)
+		b.WriteString("    volumes:\n")
+		fmt.Fprintf(&b, "      - %s/dns:/etc/coredns\n", globalDir)
+		b.WriteString("    networks: [nova]\n\n")
 	}
 
 	// Mailpit (always included)
