@@ -95,7 +95,11 @@ func nodeServiceForProject(
 		setupCmds = append(setupCmds,
 			"mkdir -p /tmp/corepack-bin",
 			"corepack enable --install-directory /tmp/corepack-bin "+pm,
-			"export PATH=/tmp/corepack-bin:$PATH",
+			// $$ so docker compose passes a literal $PATH through to the
+			// container shell instead of interpolating the host's PATH,
+			// which on WSL2 contains entries like "Program Files (x86)"
+			// that break sh parsing.
+			"export PATH=/tmp/corepack-bin:$$PATH",
 		)
 	}
 

@@ -54,8 +54,11 @@ func TestNodeServiceForProject(t *testing.T) {
 				if !strings.Contains(cmd, "corepack enable --install-directory /tmp/corepack-bin pnpm") {
 					t.Errorf("command should enable pnpm into /tmp/corepack-bin, got: %s", cmd)
 				}
-				if !strings.Contains(cmd, "export PATH=/tmp/corepack-bin:$PATH") {
-					t.Errorf("command should prepend /tmp/corepack-bin to PATH, got: %s", cmd)
+				if !strings.Contains(cmd, "export PATH=/tmp/corepack-bin:$$PATH") {
+					t.Errorf("command should prepend /tmp/corepack-bin to PATH with compose-escaped $$PATH, got: %s", cmd)
+				}
+				if strings.Contains(strings.ReplaceAll(cmd, "$$PATH", ""), "$PATH") {
+					t.Errorf("command contains unescaped $PATH — compose interpolates it from the host, got: %s", cmd)
 				}
 				if !strings.Contains(cmd, "pnpm dev") {
 					t.Errorf("command should contain 'pnpm dev', got: %s", cmd)
@@ -79,8 +82,11 @@ func TestNodeServiceForProject(t *testing.T) {
 				if !strings.Contains(cmd, "corepack enable --install-directory /tmp/corepack-bin yarn") {
 					t.Errorf("command should enable yarn into /tmp/corepack-bin, got: %s", cmd)
 				}
-				if !strings.Contains(cmd, "export PATH=/tmp/corepack-bin:$PATH") {
-					t.Errorf("command should prepend /tmp/corepack-bin to PATH, got: %s", cmd)
+				if !strings.Contains(cmd, "export PATH=/tmp/corepack-bin:$$PATH") {
+					t.Errorf("command should prepend /tmp/corepack-bin to PATH with compose-escaped $$PATH, got: %s", cmd)
+				}
+				if strings.Contains(strings.ReplaceAll(cmd, "$$PATH", ""), "$PATH") {
+					t.Errorf("command contains unescaped $PATH — compose interpolates it from the host, got: %s", cmd)
 				}
 				if !strings.Contains(cmd, "yarn dev") {
 					t.Errorf("command should contain 'yarn dev', got: %s", cmd)

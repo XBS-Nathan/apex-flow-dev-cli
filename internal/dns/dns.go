@@ -80,6 +80,15 @@ func corefile(ip string) string {
 	b.WriteString("\ttemplate IN AAAA {\n")
 	b.WriteString("\t\trcode NOERROR\n")
 	b.WriteString("\t}\n")
+	// Apple clients query HTTPS/SVCB records before A; without a template
+	// those fall off the plugin chain as SERVFAIL, which macOS/iOS treat
+	// as resolution failure even though A lookups succeed.
+	b.WriteString("\ttemplate IN HTTPS {\n")
+	b.WriteString("\t\trcode NOERROR\n")
+	b.WriteString("\t}\n")
+	b.WriteString("\ttemplate IN SVCB {\n")
+	b.WriteString("\t\trcode NOERROR\n")
+	b.WriteString("\t}\n")
 	b.WriteString("}\n")
 	return b.String()
 }

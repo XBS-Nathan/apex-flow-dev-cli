@@ -73,6 +73,8 @@ func TestCorefile(t *testing.T) {
 		"test:53 {",
 		`answer "{{ .Name }} 300 IN A 100.64.0.5"`,
 		"template IN AAAA",
+		"template IN HTTPS",
+		"template IN SVCB",
 		"rcode NOERROR",
 		"reload",
 	} {

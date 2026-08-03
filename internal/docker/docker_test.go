@@ -298,7 +298,7 @@ func TestGenerateCompose_NoFrankenPHP_NoChange(t *testing.T) {
 }
 
 func TestGenerateCompose_DNSService(t *testing.T) {
-	t.Setenv("HOME", "/home/user")
+	t.Setenv("HOME", t.TempDir())
 
 	opts := defaultOpts(t, "8.2")
 	opts.DNSListenIP = "100.64.0.5"
@@ -323,7 +323,7 @@ func TestGenerateCompose_DNSService(t *testing.T) {
 }
 
 func TestGenerateCompose_NoDNSByDefault(t *testing.T) {
-	t.Setenv("HOME", "/home/user")
+	t.Setenv("HOME", t.TempDir())
 
 	got := generateCompose(defaultOpts(t, "8.2"))
 	if strings.Contains(got, "coredns") {
